@@ -8,7 +8,6 @@ import {
   persistLocalViewStateFromAppState,
   stripLocalViewStateFromPersistedState,
 } from './viewState'
-import { markPersistedStateAsSynced } from './write'
 
 function parsePersistedStateValue(value: unknown): {
   state: PersistedAppState | null
@@ -78,14 +77,18 @@ function stripScrollbackFromState(state: PersistedAppState): PersistedAppState {
   }
 }
 
-export async function readPersistedStateWithMeta(): Promise<{
+export interface PersistedStateReadResult {
   state: PersistedAppState | null
   recovery: PersistenceRecoveryReason | null
   hasStandardWindowSizeBucket: boolean
-}> {
+  /** False when legacy data can be restored but its durable migration failed. */
+  isPersisted: boolean
+}
+
+export async function readPersistedStateWithMeta(): Promise<PersistedStateReadResult> {
   const port = getPersistencePort()
   if (!port) {
-    return { state: null, recovery: null, hasStandardWindowSizeBucket: false }
+    return { state: null, recovery: null, hasStandardWindowSizeBucket: false, isPersisted: false }
   }
 
   const primary = await port.readAppState()
@@ -95,36 +98,43 @@ export async function readPersistedStateWithMeta(): Promise<{
     const parsed = parsePersistedStateValue(primary.state)
     if (parsed.state) {
       const state = applyLocalViewStateToPersistedState(parsed.state)
-      markPersistedStateAsSynced(state)
       return {
         state,
         recovery,
         hasStandardWindowSizeBucket: parsed.hasStandardWindowSizeBucket,
+        isPersisted: true,
       }
     }
   }
 
   if (port.kind !== 'ipc') {
-    return { state: null, recovery, hasStandardWindowSizeBucket: false }
+    return { state: null, recovery, hasStandardWindowSizeBucket: false, isPersisted: false }
   }
 
   const legacyRaw = readLegacyLocalStorageRaw()
   if (!legacyRaw) {
-    return { state: null, recovery, hasStandardWindowSizeBucket: false }
+    return { state: null, recovery, hasStandardWindowSizeBucket: false, isPersisted: false }
   }
 
   const legacyParsed = parseRawPersistedState(legacyRaw)
   if (!legacyParsed) {
-    return { state: null, recovery, hasStandardWindowSizeBucket: false }
+    return { state: null, recovery, hasStandardWindowSizeBucket: false, isPersisted: false }
   }
 
   const migratedState = stripScrollbackFromState(legacyParsed)
+  // Migrate the persisted envelope directly, including its disclosure fields.
+  // Live presentation state changes only when the caller accepts this snapshot.
   persistLocalViewStateFromAppState(migratedState)
   const migratedAppStateResult = await port.writeAppState(
     stripLocalViewStateFromPersistedState(migratedState),
   )
   if (!migratedAppStateResult.ok) {
-    return { state: migratedState, recovery, hasStandardWindowSizeBucket: false }
+    return {
+      state: migratedState,
+      recovery,
+      hasStandardWindowSizeBucket: false,
+      isPersisted: false,
+    }
   }
 
   await Promise.allSettled(
@@ -141,13 +151,10 @@ export async function readPersistedStateWithMeta(): Promise<{
   )
 
   return {
-    state: (() => {
-      const state = applyLocalViewStateToPersistedState(migratedState)
-      markPersistedStateAsSynced(state)
-      return state
-    })(),
+    state: applyLocalViewStateToPersistedState(migratedState),
     recovery,
     hasStandardWindowSizeBucket: false,
+    isPersisted: true,
   }
 }
 

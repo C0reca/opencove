@@ -8,11 +8,14 @@ import {
   AGENT_PROVIDERS,
   isTaskTitleAgentProvider,
   isValidProvider,
-  normalizeAgentProviderOrder,
+  resolveDefaultFirstAgentProviderOrder,
   type AgentProvider,
 } from './agentSettings.providers'
 import { normalizeFocusNodeTargetZoom } from './focusNodeTargetZoom'
 import { normalizeSidebarCollapsedIds } from './sidebarTreeSettings'
+import { normalizeSidebarViewSettings } from './sidebarViewSettings'
+import { normalizePixelEffectSettings } from './pixelEffectSettings'
+import { normalizeDisabledPluginIds, normalizePluginContributions } from './pluginSettings'
 import { isValidUiLanguage, isValidUiTheme } from './uiSettings'
 import {
   isValidUpdateChannel,
@@ -26,8 +29,10 @@ import {
   isValidCanvasWheelBehavior,
   isValidCanvasWheelZoomModifier,
   isValidStandardWindowSizeBucket,
+  isValidNodeExpandBehavior,
 } from './canvasSettings'
 import {
+  areNormalizedSettingsValuesEqual,
   isRecord,
   normalizeBoolean,
   normalizeIntegerInRange,
@@ -68,6 +73,7 @@ export {
   mergeSelectableAgentProviderOrder,
   normalizeAgentProviderOrder,
   normalizeSelectableAgentProviderOrder,
+  resolveDefaultFirstAgentProviderOrder,
   resolveSelectableAgentProvider,
 } from './agentSettings.providers'
 export type {
@@ -76,13 +82,19 @@ export type {
   TaskTitleAgentProvider,
   WorktreeNameSuggestionAgentProvider,
 } from './agentSettings.providers'
-export type { AgentSettings, TaskTitleProvider, TerminalProfileId } from './agentSettings.types'
+export type {
+  AgentSettings,
+  PixelEffectSettings,
+  TaskTitleProvider,
+  TerminalProfileId,
+} from './agentSettings.types'
 export {
   VIEWPORT_TRANSITIONS,
   CANVAS_INPUT_MODES,
   CANVAS_WHEEL_BEHAVIORS,
   CANVAS_WHEEL_ZOOM_MODIFIERS,
   STANDARD_WINDOW_SIZE_BUCKETS,
+  NODE_EXPAND_BEHAVIORS,
 } from './canvasSettings'
 export type {
   ViewportTransition,
@@ -90,6 +102,7 @@ export type {
   CanvasWheelBehavior,
   CanvasWheelZoomModifier,
   StandardWindowSizeBucket,
+  NodeExpandBehavior,
 } from './canvasSettings'
 export {
   DEFAULT_UI_LANGUAGE,
@@ -153,6 +166,7 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
     ? value.language
     : DEFAULT_AGENT_SETTINGS.language
   const uiTheme = isValidUiTheme(value.uiTheme) ? value.uiTheme : DEFAULT_AGENT_SETTINGS.uiTheme
+  const pixelEffects = normalizePixelEffectSettings(value, uiTheme)
   const isPrimarySidebarCollapsed =
     normalizeBoolean(value.isPrimarySidebarCollapsed) ??
     DEFAULT_AGENT_SETTINGS.isPrimarySidebarCollapsed
@@ -162,7 +176,10 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
     MIN_WORKSPACE_SEARCH_PANEL_WIDTH,
     MAX_WORKSPACE_SEARCH_PANEL_WIDTH,
   )
-  const agentProviderOrder = normalizeAgentProviderOrder(value.agentProviderOrder)
+  const agentProviderOrder = resolveDefaultFirstAgentProviderOrder(
+    value.agentProviderOrder,
+    defaultProvider,
+  )
 
   const agentFullAccess =
     normalizeBoolean(value.agentFullAccess) ?? DEFAULT_AGENT_SETTINGS.agentFullAccess
@@ -296,6 +313,9 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
   const preserveWindowSizesOnArrange =
     normalizeBoolean(value.preserveWindowSizesOnArrange) ??
     DEFAULT_AGENT_SETTINGS.preserveWindowSizesOnArrange
+  const nodeExpandBehavior = isValidNodeExpandBehavior(value.nodeExpandBehavior)
+    ? value.nodeExpandBehavior
+    : DEFAULT_AGENT_SETTINGS.nodeExpandBehavior
   const websiteWindowPolicy = normalizeWebsiteWindowPolicy(
     value.websiteWindowPolicy,
     DEFAULT_AGENT_SETTINGS.websiteWindowPolicy,
@@ -382,11 +402,15 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
   return {
     language,
     uiTheme,
+    disabledPluginIds: normalizeDisabledPluginIds(value.disabledPluginIds),
+    pluginContributions: normalizePluginContributions(value.pluginContributions),
+    ...pixelEffects,
     isPrimarySidebarCollapsed,
     sidebarCollapsedWorkspaceIds: normalizeSidebarCollapsedIds(value.sidebarCollapsedWorkspaceIds),
     sidebarCollapsedSpaceGroupIds: normalizeSidebarCollapsedIds(
       value.sidebarCollapsedSpaceGroupIds,
     ),
+    sidebarView: normalizeSidebarViewSettings(value.sidebarView),
     workspaceSearchPanelWidth,
     defaultProvider,
     agentProviderOrder,
@@ -424,6 +448,7 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
     canvasWheelBehavior,
     canvasWheelZoomModifier,
     standardWindowSizeBucket,
+    nodeExpandBehavior,
     preserveWindowSizesOnArrange,
     websiteWindowPolicy,
     browserDefaultMode,
@@ -446,36 +471,6 @@ export function normalizeAgentSettings(value: unknown): AgentSettings {
     archiveSpaceDeleteWorktreeByDefault,
     archiveSpaceDeleteBranchByDefault,
   }
-}
-
-function areNormalizedSettingsValuesEqual(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) {
-    return true
-  }
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((item, index) => areNormalizedSettingsValuesEqual(item, right[index]))
-    )
-  }
-
-  if (!isRecord(left) || !isRecord(right)) {
-    return false
-  }
-
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      key =>
-        Object.prototype.hasOwnProperty.call(right, key) &&
-        areNormalizedSettingsValuesEqual(left[key], right[key]),
-    )
-  )
 }
 
 /** Accepts only the complete canonical settings shape emitted by the settings owner. */

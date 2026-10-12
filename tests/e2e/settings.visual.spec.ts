@@ -13,22 +13,27 @@ const NARROW_WINDOW_SIZE = { width: 720, height: 650 }
 const PRIMARY_SETTINGS_PAGE_CAPTURES = [
   { id: 'general', navTestId: 'settings-section-nav-general' },
   { id: 'appearance', navTestId: 'settings-section-nav-appearance' },
-  { id: 'notifications', navTestId: 'settings-section-nav-notifications' },
   { id: 'canvas-windows', navTestId: 'settings-section-nav-canvas' },
   { id: 'agent', navTestId: 'settings-section-nav-agent' },
-  { id: 'tasks-shortcuts', navTestId: 'settings-section-nav-task-configuration' },
+  { id: 'terminal', navTestId: 'settings-section-nav-terminal' },
+  { id: 'tasks-shortcuts', navTestId: 'settings-section-nav-shortcuts' },
   { id: 'worker', navTestId: 'settings-section-nav-worker' },
-  { id: 'integrations', navTestId: 'settings-section-nav-integrations' },
   { id: 'advanced', navTestId: 'settings-section-nav-experimental' },
 ] as const
 
 async function openSettings(window: Page): Promise<Locator> {
+  const navigationTrigger = window.getByTestId('primary-sidebar-open')
+  if (await navigationTrigger.isVisible()) {
+    await navigationTrigger.click()
+    await expect(window.getByTestId('primary-sidebar-drawer')).toBeVisible()
+  }
   const settingsTrigger = window.locator('[data-testid="app-header-settings"]')
   await expect(settingsTrigger).toBeVisible()
   await settingsTrigger.click({ noWaitAfter: true })
 
-  const dialog = window.getByRole('dialog')
+  const dialog = window.getByTestId('settings-panel')
   await expect(dialog).toBeVisible()
+  await expect(window.getByTestId('primary-sidebar-drawer')).toHaveCount(0)
   return dialog
 }
 
@@ -95,13 +100,14 @@ async function verifyWorkerHierarchyAndAttach(
 
   const runtime = dialog.getByRole('group', { name: 'Worker 运行', exact: true })
   const body = runtime.locator(':scope > .settings-panel__group-body')
-  const workerMode = runtime.getByRole('group', { name: 'Worker 模式' })
   const cli = runtime.getByRole('group', { name: 'CLI', exact: true })
   const localWorker = runtime.getByRole('group', { name: '本机 Worker' })
   await expect(body).toHaveCount(1)
-  await expect(workerMode).toBeVisible()
+  await expect(runtime.getByRole('group', { name: 'Worker 模式' })).toHaveCount(0)
+  await expect(runtime.getByText('当前模式', { exact: true })).toHaveCount(0)
   await expect(cli.getByTestId('settings-worker-cli-status')).toBeVisible()
-  await expect(localWorker.getByTestId('settings-worker-local-status')).toBeVisible()
+  await expect(localWorker.getByTestId('settings-worker-local-status')).toHaveCount(0)
+  await expect(localWorker.getByTestId('settings-worker-local-start')).toBeVisible()
 
   await expect(runtime.locator('.settings-panel__worker-module')).toHaveCount(0)
 
@@ -111,13 +117,17 @@ async function verifyWorkerHierarchyAndAttach(
       borderRadius: style.borderRadius,
       boxShadow: style.boxShadow,
       overflow: style.overflow,
+      background: style.backgroundColor,
     }
   })
-  expect(groupSurface.borderRadius).toBe('12px')
-  expect(groupSurface.boxShadow).toContain('inset')
-  expect(groupSurface.overflow).toBe('hidden')
+  expect(groupSurface).toEqual({
+    borderRadius: '0px',
+    boxShadow: 'none',
+    overflow: 'visible',
+    background: 'rgba(0, 0, 0, 0)',
+  })
 
-  const moduleSurface = await workerMode.evaluate(element => {
+  const moduleSurface = await cli.evaluate(element => {
     const style = getComputedStyle(element)
     return { backgroundColor: style.backgroundColor, borderRadius: style.borderRadius }
   })
@@ -210,7 +220,7 @@ async function resizeMainWindow(
 }
 
 test.describe('Settings visual shell', () => {
-  test('uses an accessible page-aware dialog and captures both themes', async ({
+  test('uses an accessible settings region and captures both themes', async ({
     browserName,
   }, testInfo) => {
     const { electronApp, window } = await launchApp()
@@ -218,15 +228,15 @@ test.describe('Settings visual shell', () => {
     try {
       void browserName
       const dialog = await openSettings(window)
-      await expect(dialog).toHaveAttribute('aria-modal', 'true')
+      await expect(dialog).not.toHaveAttribute('aria-modal')
       const heading = dialog.getByRole('heading', { level: 2 })
       const initialTitle = await readHeadingText(heading)
-      await expect(dialog).toHaveAccessibleName(initialTitle)
+      await expect(dialog).toHaveAccessibleName(/Settings|设置/)
 
       await dialog.locator('[data-testid="settings-section-nav-appearance"]').click()
       const appearanceTitle = await readHeadingText(heading)
       expect(appearanceTitle).not.toBe(initialTitle)
-      await expect(dialog).toHaveAccessibleName(appearanceTitle)
+      await expect(dialog).toHaveAccessibleName(/Settings|设置/)
 
       await expectNoHorizontalOverflow(dialog, 'settings dialog')
       await expectNoHorizontalOverflow(
@@ -277,10 +287,10 @@ test.describe('Settings visual shell', () => {
         contentBox?.y ?? Number.NEGATIVE_INFINITY,
       )
 
-      const search = sidebar.locator('[data-testid="settings-panel-search"]')
+      const search = dialog.locator('[data-testid="settings-panel-search"]')
       await expect(search).toBeVisible()
       await search.fill('e')
-      const searchResults = sidebar.locator('[data-testid="settings-panel-search-results"]')
+      const searchResults = dialog.locator('[data-testid="settings-panel-search-results"]')
       const searchOptions = searchResults.getByRole('option')
       await expect(searchOptions).toHaveCount(8)
       await pressKeyTimes(search, 'ArrowDown', 8)
@@ -302,7 +312,7 @@ test.describe('Settings visual shell', () => {
       await search.fill('theme')
       await search.press('ArrowDown')
       await search.press('Enter')
-      await expect(dialog.locator('[data-testid="settings-ui-theme-trigger"]')).toBeVisible()
+      await expect(dialog.getByTestId('settings-ui-theme')).toBeVisible()
 
       await expectNoHorizontalOverflow(dialog, 'narrow settings dialog')
       await expectNoHorizontalOverflow(contentWrapper, 'narrow settings content wrapper')
@@ -368,16 +378,17 @@ test.describe('Settings visual shell', () => {
       const dialog = await openSettings(window)
       const search = dialog.locator('[data-testid="settings-panel-search"]')
 
-      await expect(window.locator('.app-shell')).toHaveAttribute('inert', '')
+      await expect(window.locator('.app-shell')).toHaveJSProperty('inert', false)
+      await expect(window.locator('.workspace-main')).toHaveJSProperty('inert', true)
       await expect(search).toBeFocused()
-      await search.press('Shift+Tab')
-      expect(await dialog.evaluate(panel => panel.contains(document.activeElement))).toBe(true)
+      await settingsTrigger.focus()
+      await expect(settingsTrigger).toBeFocused()
 
-      await dialog.locator('[data-testid="settings-section-nav-appearance"]').click()
-      const themeTrigger = dialog.locator('[data-testid="settings-ui-theme-trigger"]')
+      await dialog.getByTestId('settings-section-nav-general').click()
+      const themeTrigger = dialog.getByTestId('settings-language-trigger')
       await themeTrigger.focus()
       await themeTrigger.press('Enter')
-      const themeMenu = window.locator('[data-testid="settings-ui-theme-menu"]')
+      const themeMenu = window.getByTestId('settings-language-menu')
       await expect(themeMenu).toBeVisible()
       expect(await themeMenu.evaluate(menu => menu.parentElement === document.body)).toBe(true)
 
@@ -388,7 +399,7 @@ test.describe('Settings visual shell', () => {
       await window.keyboard.press('Escape')
 
       await expect(dialog).toBeHidden()
-      await expect(window.locator('.app-shell')).not.toHaveAttribute('inert', '')
+      await expect(window.locator('.workspace-main')).toHaveJSProperty('inert', false)
       await expect(settingsTrigger).toBeFocused()
     } finally {
       await electronApp.close()

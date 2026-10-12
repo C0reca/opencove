@@ -36,6 +36,7 @@
     "files": [
       "out{,/**/*}",
       "src/app/cli{,/**/*}",
+      "docs/plugins{,/**/*}",
       "package.json"
     ],
     "generateUpdatesFilesForAllChannels": true,
@@ -117,8 +118,11 @@
     "release:minor": "node scripts/prepare-release.mjs minor",
     "release:major": "node scripts/prepare-release.mjs major",
     "release:version": "node scripts/prepare-release.mjs",
-    "pre-commit": "pnpm line-check:staged && pnpm secret-check:staged && pnpm naming-check:staged && pnpm ui:style-check && pnpm lint:fix && pnpm format-check:staged && pnpm check && pnpm test:staged && pnpm test:terminal-recovery:native && pnpm test:e2e:pre-commit",
-    "prepare": "husky"
+    "pre-commit": "pnpm verify:quick",
+    "prepare": "husky",
+    "verify:checks": "pnpm line-check:staged && pnpm secret-check:staged && pnpm naming-check:staged && pnpm ui:style-check && pnpm lint:fix && pnpm format-check:staged && pnpm check",
+    "verify:quick": "pnpm verify:checks && pnpm test:staged && pnpm test:terminal-recovery:native && pnpm test:e2e:pre-commit",
+    "verify:full": "pnpm verify:checks && pnpm test -- --run && pnpm test:terminal-recovery:native && pnpm test:e2e:pre-commit --full"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -146,10 +150,16 @@
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
+    "postcss": "^8.5.29",
+    "postcss-selector-parser": "^7.1.6",
+    "postcss-value-parser": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.7.3",
     "react-router-dom": "^7.13.1",
+    "remark-gfm": "^4.0.1",
+    "semver": "^7.7.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "ws": "^8.20.0",
@@ -165,6 +175,7 @@
     "@types/node": "^22.19.15",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.0.0",
+    "@types/semver": "^7.7.1",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.0",

@@ -15,12 +15,13 @@ export interface SidebarSpaceGroupModel {
   labelColor: LabelColor | null
   space: WorkspaceSpaceState | null
   agents: SidebarAgentItemModel[]
+  sidebarHidden?: boolean
 }
 
 export interface SidebarProjectTreeModel {
   workspace: WorkspaceState
   spaceGroups: SidebarSpaceGroupModel[]
-  projectRootGroup: SidebarSpaceGroupModel | null
+  projectRootGroup: SidebarSpaceGroupModel
   agentCount: number
   workingAgentCount: number
 }
@@ -77,17 +78,14 @@ export function buildSidebarProjectTree(workspace: WorkspaceState): SidebarProje
     group.agents.push(agentItem)
   }
 
-  const projectRootGroup =
-    projectRootAgents.length > 0
-      ? {
-          id: SIDEBAR_UNASSIGNED_SPACE_GROUP_ID,
-          kind: 'project-root' as const,
-          name: 'Project root',
-          labelColor: null,
-          space: null,
-          agents: projectRootAgents,
-        }
-      : null
+  const projectRootGroup: SidebarSpaceGroupModel = {
+    id: SIDEBAR_UNASSIGNED_SPACE_GROUP_ID,
+    kind: 'project-root',
+    name: 'Project canvas',
+    labelColor: null,
+    space: null,
+    agents: projectRootAgents,
+  }
 
   return {
     workspace,

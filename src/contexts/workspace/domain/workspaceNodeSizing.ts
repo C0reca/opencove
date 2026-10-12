@@ -10,7 +10,9 @@ export type WorkspaceNodeKind =
   | 'role'
   | 'image'
   | 'document'
+  | 'folder'
   | 'website'
+  | 'plugin'
 
 export interface Size {
   width: number
@@ -33,7 +35,9 @@ const KIND_UNITS: Record<WorkspaceNodeKind, { col: number; row: number }> = {
   role: { col: 3, row: 4 },
   image: { col: 4, row: 4 },
   document: { col: 4, row: 6 },
+  folder: { col: 4, row: 5 },
   website: { col: 8, row: 8 },
+  plugin: { col: 6, row: 6 },
 }
 
 const MIN_SIZE_BY_KIND: Record<WorkspaceNodeKind, Size> = {
@@ -44,7 +48,9 @@ const MIN_SIZE_BY_KIND: Record<WorkspaceNodeKind, Size> = {
   role: { width: 320, height: 300 },
   image: { width: 180, height: 120 },
   document: { width: 400, height: 260 },
+  folder: { width: 360, height: 260 },
   website: { width: 400, height: 260 },
+  plugin: { width: 400, height: 260 },
 }
 
 const MAX_SIZE_BY_KIND: Record<WorkspaceNodeKind, Size> = {
@@ -55,7 +61,9 @@ const MAX_SIZE_BY_KIND: Record<WorkspaceNodeKind, Size> = {
   role: { width: 520, height: 640 },
   image: { width: 960, height: 720 },
   document: { width: 960, height: 900 },
+  folder: { width: 960, height: 900 },
   website: { width: 1280, height: 1040 },
+  plugin: { width: 1040, height: 820 },
 }
 
 function clampSize(size: Size, min: Size, max: Size): Size {

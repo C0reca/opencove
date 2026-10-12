@@ -1,4 +1,8 @@
+import { PluginContextCommands } from '@contexts/plugins/presentation/renderer/PluginContextCommands'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { ViewportMenuSurface } from '@app/renderer/components/ViewportMenuSurface'
+import { useCompactViewport } from '@app/renderer/components/useCompactViewport'
+import { useTranslation } from '@app/renderer/i18n'
 import { WorkspaceContextPaneMenuContent } from './WorkspaceContextMenuParts'
 import { WorkspaceContextSelectionMenuContent } from './WorkspaceContextMenuSelectionParts'
 import { WorkspaceContextSubmenus } from './WorkspaceContextSubmenus'
@@ -23,6 +27,7 @@ export function WorkspaceContextMenu({
   createTerminalNode,
   createNoteNodeFromContextMenu,
   createWebsiteNodeFromContextMenu,
+  createPluginNodeFromContextMenu,
   websiteWindowsEnabled,
   openTaskCreator,
   openRoleCreator,
@@ -58,6 +63,8 @@ export function WorkspaceContextMenu({
   convertSelectedNoteToTask,
   setSelectedNodeLabelColorOverride,
 }: WorkspaceContextMenuProps): React.JSX.Element | null {
+  const { t } = useTranslation()
+  const compact = useCompactViewport()
   const [openSubmenu, setOpenSubmenu] = useState<OpenSubmenu>(null)
   const closeSubmenuTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const { sortedInstalledProviders, isLoadingInstalledProviders, ensureInstalledProvidersLoaded } =
@@ -92,11 +99,14 @@ export function WorkspaceContextMenu({
 
   const scheduleSubmenuClose = useCallback(() => {
     cancelScheduledSubmenuClose()
+    if (compact) {
+      return
+    }
     closeSubmenuTimeoutRef.current = setTimeout(() => {
       closeSubmenuTimeoutRef.current = null
       setOpenSubmenu(previous => (previous === 'arrangeBy' ? previous : null))
     }, SUBMENU_CLOSE_DELAY_MS)
-  }, [cancelScheduledSubmenuClose])
+  }, [cancelScheduledSubmenuClose, compact])
 
   const openAgentProviderSubmenu = useCallback(() => {
     cancelScheduledSubmenuClose()
@@ -359,10 +369,14 @@ export function WorkspaceContextMenu({
 
   return (
     <>
-      <div
+      <ViewportMenuSurface
+        open
+        mobileTitle={t('sidebar.rootCanvas')}
+        onDismiss={closeContextMenu}
+        dismissOnEscape
         ref={menuRef}
         className="workspace-context-menu workspace-canvas-context-menu"
-        style={{ top: rootMenuPlacement.top, left: rootMenuPlacement.left }}
+        placement={{ type: 'absolute', top: rootMenuPlacement.top, left: rootMenuPlacement.left }}
         onMouseDown={event => {
           event.stopPropagation()
         }}
@@ -377,6 +391,7 @@ export function WorkspaceContextMenu({
             createTerminalNode={createTerminalNode}
             createNoteNodeFromContextMenu={createNoteNodeFromContextMenu}
             createWebsiteNodeFromContextMenu={createWebsiteNodeFromContextMenu}
+            createPluginNodeFromContextMenu={createPluginNodeFromContextMenu}
             websiteWindowsEnabled={websiteWindowsEnabled}
             openTaskCreator={openTaskCreator}
             roleButtonRef={roleButtonRef}
@@ -416,15 +431,27 @@ export function WorkspaceContextMenu({
           <WorkspaceContextSelectionMenuContent
             createSpaceFromSelectedNodes={createSpaceFromSelectedNodes}
             openLabelColorSubmenu={openLabelColorSubmenu}
+            isLabelColorSubmenuOpen={openSubmenu === 'label-color'}
             labelColorButtonRef={labelColorButtonRef}
             canConvertSelectedNoteToTask={canConvertSelectedNoteToTask}
             isConvertSelectedNoteToTaskDisabled={isConvertSelectedNoteToTaskDisabled}
             convertSelectedNoteToTask={convertSelectedNoteToTask}
             clearNodeSelection={clearNodeSelection}
             closeContextMenu={closeContextMenu}
+            closeWindow={contextMenu.closeWindow}
+            nodeId={contextMenu.nodeId}
           />
         )}
-      </div>
+        <PluginContextCommands
+          surface={contextMenu.kind === 'pane' ? 'canvas' : 'node'}
+          nodeIds={
+            contextMenu.kind === 'selection' && contextMenu.nodeId
+              ? [contextMenu.nodeId]
+              : undefined
+          }
+          onClose={closeContextMenu}
+        />
+      </ViewportMenuSurface>
 
       <WorkspaceContextSubmenus
         contextMenu={contextMenu}

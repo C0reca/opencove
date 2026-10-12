@@ -16,6 +16,9 @@ import {
 } from './WorkspaceSpaceExplorerOverlay.layout'
 import type { SpaceExplorerClipboardItem } from './WorkspaceSpaceExplorerOverlay.operations'
 import { WorkspaceSpaceExplorerOverlayBody } from './WorkspaceSpaceExplorerOverlayBody'
+import { NodeResizeHandles } from '../../shared/NodeResizeHandles'
+import { useExplorerWindowResize } from './useExplorerWindowResize'
+import type { Size } from '../../../types'
 import { WorkspaceDocumentNavigationContext } from '../WorkspaceDocumentNavigationContext'
 
 export function WorkspaceSpaceExplorerOverlay({
@@ -61,9 +64,9 @@ export function WorkspaceSpaceExplorerOverlay({
 }): React.JSX.Element | null {
   const { t } = useTranslation()
   const directoryTarget = React.useContext(WorkspaceDocumentNavigationContext)?.directoryTarget
-  const requestedRootUri =
+  const requestedDirectory =
     directoryTarget?.spaceId === spaceId && directoryTarget.mountId === targetMountId
-      ? directoryTarget.uri
+      ? directoryTarget
       : null
   const [translateX, translateY, zoom] = useStore(selectViewportTransform)
   const viewportWidth = useStore(state => state.width)
@@ -72,22 +75,14 @@ export function WorkspaceSpaceExplorerOverlay({
   const containerRef = React.useRef<HTMLElement | null>(null)
   const createInputRef = React.useRef<HTMLInputElement | null>(null)
   const renameInputRef = React.useRef<HTMLInputElement | null>(null)
-  const resizeStartRef = React.useRef<{
-    startX: number
-    startWidth: number
-    minWidth: number
-    maxWidth: number
-    zoom: number
-  } | null>(null)
   const dragStartRef = React.useRef<{
     startX: number
     startY: number
     startOffset: SpaceExplorerWindowOffset
     zoom: number
   } | null>(null)
-  const resizeCleanupRef = React.useRef<(() => void) | null>(null)
   const dragCleanupRef = React.useRef<(() => void) | null>(null)
-  const [manualWidth, setManualWidth] = React.useState<number | null>(null)
+  const [manualSize, setManualSize] = React.useState<Size | null>(null)
   const [manualOffset, setManualOffset] = React.useState<SpaceExplorerWindowOffset | null>(null)
 
   const trimmedDirectoryPath = directoryPath.trim()
@@ -99,7 +94,7 @@ export function WorkspaceSpaceExplorerOverlay({
   const [rootResolveError, setRootResolveError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    setManualWidth(null)
+    setManualSize(null)
     setManualOffset(null)
   }, [spaceId])
 
@@ -162,8 +157,7 @@ export function WorkspaceSpaceExplorerOverlay({
     !directoryRootUri &&
     resolvedMountRootUri === null &&
     rootResolveError === null
-  const rootUri =
-    requestedRootUri ?? (isResolvingMountRoot ? null : (directoryRootUri ?? resolvedMountRootUri))
+  const rootUri = isResolvingMountRoot ? null : (directoryRootUri ?? resolvedMountRootUri)
   const mountIdForFilesystem = targetMountId
   const viewportBounds = React.useMemo<SpaceExplorerViewportBounds | null>(() => {
     if (
@@ -188,12 +182,12 @@ export function WorkspaceSpaceExplorerOverlay({
     return resolveExplorerWindowPlacement({
       spaceRect: rect,
       preferredWidth:
-        manualWidth ??
+        manualSize?.width ??
         resolveExplorerAutoPreferredWidth(
           agentSettings.standardWindowSizeBucket,
           agentSettings.defaultProvider,
         ),
-      preferredHeight: Math.max(0, Math.floor(rect.height - 64)),
+      preferredHeight: manualSize?.height ?? Math.max(0, Math.floor(rect.height - 64)),
       preferredOffset: manualOffset ?? resolveExplorerDefaultOffset(),
       viewport: viewportBounds,
     })
@@ -201,16 +195,10 @@ export function WorkspaceSpaceExplorerOverlay({
     agentSettings.defaultProvider,
     agentSettings.standardWindowSizeBucket,
     manualOffset,
-    manualWidth,
+    manualSize,
     rect,
     viewportBounds,
   ])
-
-  const stopResize = React.useCallback(() => {
-    resizeStartRef.current = null
-    resizeCleanupRef.current?.()
-    resizeCleanupRef.current = null
-  }, [])
 
   const stopWindowDrag = React.useCallback(() => {
     dragStartRef.current = null
@@ -220,10 +208,9 @@ export function WorkspaceSpaceExplorerOverlay({
 
   React.useEffect(() => {
     return () => {
-      stopResize()
       stopWindowDrag()
     }
-  }, [stopResize, stopWindowDrag])
+  }, [stopWindowDrag])
 
   React.useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -348,55 +335,15 @@ export function WorkspaceSpaceExplorerOverlay({
     ],
   )
 
-  const handleResizeStart = React.useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.stopPropagation()
-      if (event.button !== 0) {
-        return
-      }
-
-      event.preventDefault()
-      containerRef.current?.focus({ preventScroll: true })
-      stopResize()
-
-      resizeStartRef.current = {
-        startX: event.clientX,
-        startWidth: placement.width,
-        minWidth: placement.minWidth,
-        maxWidth: placement.maxWidth,
-        zoom: viewportZoom,
-      }
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        const resizeStart = resizeStartRef.current
-        if (!resizeStart) {
-          return
-        }
-
-        moveEvent.preventDefault()
-        const deltaFlow = (moveEvent.clientX - resizeStart.startX) / resizeStart.zoom
-        const nextWidth = Math.min(
-          resizeStart.maxWidth,
-          Math.max(resizeStart.minWidth, resizeStart.startWidth + deltaFlow),
-        )
-        setManualWidth(nextWidth)
-      }
-
-      const handleEnd = () => {
-        stopResize()
-      }
-
-      window.addEventListener('pointermove', handleMove, true)
-      window.addEventListener('pointerup', handleEnd, true)
-      window.addEventListener('pointercancel', handleEnd, true)
-      resizeCleanupRef.current = () => {
-        window.removeEventListener('pointermove', handleMove, true)
-        window.removeEventListener('pointerup', handleEnd, true)
-        window.removeEventListener('pointercancel', handleEnd, true)
-      }
+  const handleResizePointerDown = useExplorerWindowResize({
+    placement,
+    zoom: viewportZoom,
+    containerRef,
+    onResize: frame => {
+      setManualSize(frame.size)
+      setManualOffset(frame.position)
     },
-    [placement.maxWidth, placement.minWidth, placement.width, stopResize, viewportZoom],
-  )
+  })
 
   if (placement.width <= 0 || placement.height <= 0) {
     return null
@@ -409,6 +356,8 @@ export function WorkspaceSpaceExplorerOverlay({
     <section
       ref={containerRef}
       className="workspace-space-explorer workspace-space-explorer--node"
+      data-cove-part="window"
+      data-cove-kind="explorer"
       data-testid="workspace-space-explorer"
       tabIndex={0}
       style={{
@@ -432,6 +381,7 @@ export function WorkspaceSpaceExplorerOverlay({
         spaceName={spaceName}
         spaceId={spaceId}
         rootUri={rootUri}
+        requestedDirectory={requestedDirectory}
         mountId={mountIdForFilesystem}
         rootResolveError={rootResolveError}
         explorerClipboard={explorerClipboard}
@@ -448,12 +398,10 @@ export function WorkspaceSpaceExplorerOverlay({
         onDismissQuickPreview={onDismissQuickPreview}
       />
 
-      <div
-        className="workspace-space-explorer__resize-handle nodrag"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={t('spaceExplorer.resizeWidth')}
-        onPointerDown={handleResizeStart}
+      <NodeResizeHandles
+        classNamePrefix="task-node"
+        testIdPrefix="workspace-space-explorer-resizer"
+        handleResizePointerDown={handleResizePointerDown}
       />
     </section>
   )

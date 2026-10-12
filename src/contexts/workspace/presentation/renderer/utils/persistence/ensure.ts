@@ -1,6 +1,5 @@
 import type {
   AgentNodeData,
-  DocumentNodeData,
   ImageNodeData,
   NoteNodeData,
   PersistedTerminalNode,
@@ -26,6 +25,11 @@ import { normalizeResumeSessionBinding } from './ensureResumeSessionBinding'
 import { ensurePersistedRoleData } from './ensureRoleNodeData'
 import { ensurePersistedSpaceArchiveRecord } from './ensureSpaceArchiveRecord'
 import { normalizeWebsiteNodeFrame } from '../websiteNodeData'
+import { normalizeFolderNodeData } from '@shared/utils/folderNodeData'
+import { normalizeCollapsedIdList } from '../canvasCollapse'
+import { resolveFileUriName } from '@shared/utils/fileUriScope'
+import { ensurePersistedDocumentData } from './ensureDocumentNodeData'
+import { ensurePersistedPluginData } from './ensurePluginNodeData'
 import { isTerminalAgentBinding } from '../terminalAgentOverlay'
 import { isResumeSessionBindingVerified } from '../agentResumeBinding'
 import {
@@ -249,29 +253,6 @@ function ensurePersistedImageData(value: unknown): ImageNodeData | null {
   }
 }
 
-function ensurePersistedDocumentData(value: unknown): DocumentNodeData | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const record = value as Record<string, unknown>
-  const uri = typeof record.uri === 'string' ? record.uri.trim() : ''
-  if (uri.length === 0) {
-    return null
-  }
-
-  try {
-    const parsed = new URL(uri)
-    if (parsed.protocol !== 'file:') {
-      return null
-    }
-  } catch {
-    return null
-  }
-
-  return { uri }
-}
-
 function normalizeBrowserMode(value: unknown): BrowserMode {
   return value === 'iframe' ? 'iframe' : 'native'
 }
@@ -360,7 +341,12 @@ function ensurePersistedNode(node: unknown): PersistedTerminalNode | null {
   const role = ensurePersistedRoleData(record.task)
   const image = ensurePersistedImageData(record.task)
   const document = ensurePersistedDocumentData(record.task)
+  const folder = normalizeFolderNodeData(record.task)
+  if (kind === 'folder' && !folder) {
+    return null
+  }
   const website = ensurePersistedWebsiteData(record.task)
+  const plugin = ensurePersistedPluginData(record.task)
   const runtimeKindInput = record.runtimeKind
   const runtimeKind: TerminalRuntimeKind | undefined =
     runtimeKindInput === 'windows' || runtimeKindInput === 'wsl' || runtimeKindInput === 'posix'
@@ -370,7 +356,7 @@ function ensurePersistedNode(node: unknown): PersistedTerminalNode | null {
   return {
     id,
     ...(sessionId ? { sessionId } : {}),
-    title,
+    title: kind === 'folder' && folder ? resolveFileUriName(folder.uri, title) : title,
     titlePinnedByUser: record.titlePinnedByUser === true,
     width,
     height,
@@ -414,9 +400,13 @@ function ensurePersistedNode(node: unknown): PersistedTerminalNode | null {
               ? image
               : kind === 'document'
                 ? document
-                : kind === 'website'
-                  ? (website ?? createDefaultWebsiteData())
-                  : null,
+                : kind === 'folder'
+                  ? folder
+                  : kind === 'website'
+                    ? (website ?? createDefaultWebsiteData())
+                    : kind === 'plugin'
+                      ? plugin
+                      : null,
     position: {
       x: positionRecord.x,
       y: positionRecord.y,
@@ -443,6 +433,8 @@ export function ensurePersistedWorkspace(workspace: unknown): PersistedWorkspace
   const spaces = record.spaces
   const activeSpaceId = record.activeSpaceId
   const spaceArchiveRecords = record.spaceArchiveRecords
+  const hasCollapseState =
+    Array.isArray(record.collapsedNodeIds) || Array.isArray(record.collapsedSpaceIds)
 
   if (typeof id !== 'string' || typeof name !== 'string' || typeof path !== 'string') {
     return null
@@ -495,5 +487,11 @@ export function ensurePersistedWorkspace(workspace: unknown): PersistedWorkspace
     spaces: sanitizedSpaces,
     activeSpaceId: resolvedActiveSpaceId,
     spaceArchiveRecords: normalizedSpaceArchiveRecords,
+    ...(hasCollapseState
+      ? {
+          collapsedNodeIds: normalizeCollapsedIdList(record.collapsedNodeIds),
+          collapsedSpaceIds: normalizeCollapsedIdList(record.collapsedSpaceIds),
+        }
+      : {}),
   }
 }

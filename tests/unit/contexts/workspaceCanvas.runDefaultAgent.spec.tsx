@@ -23,7 +23,8 @@ vi.mock('@xyflow/react', () => {
       getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
       setViewport: vi.fn(),
     }),
-    useStore: (selector: (state: unknown) => unknown) => selector({ nodes: currentNodes }),
+    useStore: (selector: (state: unknown) => unknown) =>
+      selector({ nodes: currentNodes, transform: [0, 0, 1] }),
     useStoreApi: () => ({
       setState: vi.fn(),
       getState: vi.fn(() => ({})),
@@ -219,7 +220,8 @@ describe('WorkspaceCanvas run default agent', () => {
       expect(launchInMount).toHaveBeenCalledTimes(1)
     })
 
-    expect(controlSurfaceInvoke).toHaveBeenNthCalledWith(1, {
+    // Plugin discovery may run independently when the canvas mounts.
+    expect(controlSurfaceInvoke).toHaveBeenCalledWith({
       kind: 'query',
       id: 'mount.list',
       payload: { projectId: 'workspace-1' },
@@ -237,9 +239,7 @@ describe('WorkspaceCanvas run default agent', () => {
       }),
     )
     await waitFor(() => {
-      expect(screen.getByTestId('agent-node-status')).toHaveTextContent(
-        'codex · gpt-5.2-codex:standby',
-      )
+      expect(screen.getByTestId('agent-node-status')).toHaveTextContent('gpt-5.2-codex:standby')
     })
     const expectedSize = resolveDefaultAgentWindowSize('large')
     expect(latestNodes).toHaveLength(1)

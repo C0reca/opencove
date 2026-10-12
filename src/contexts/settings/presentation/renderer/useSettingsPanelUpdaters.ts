@@ -5,12 +5,23 @@ import type {
   CanvasWheelBehavior,
   CanvasWheelZoomModifier,
   FocusNodeTargetZoom,
+  PixelEffectSettings,
   StandardWindowSizeBucket,
   TaskTitleProvider,
   UiLanguage,
   UiTheme,
 } from '@contexts/settings/domain/agentSettings'
 import type { SettingsPanelProps } from './SettingsPanel.shared'
+import {
+  setPluginEnabled,
+  setPluginContributionEnabled,
+  type PluginContribution,
+} from '@contexts/settings/domain/pluginSettings'
+import {
+  mergeSelectableAgentProviderOrder,
+  normalizeSelectableAgentProviderOrder,
+  resolveDefaultFirstAgentProviderOrder,
+} from '@contexts/settings/domain/agentSettings'
 
 export function createSettingsPanelUpdaters({
   settings,
@@ -34,11 +45,40 @@ export function createSettingsPanelUpdaters({
 
   return {
     updateDefaultProvider: (provider: AgentProvider): void =>
-      updateSetting('defaultProvider', provider),
-    updateAgentProviderOrder: (providers: AgentProvider[]): void =>
-      updateSetting('agentProviderOrder', providers),
+      onChange({
+        ...settings,
+        defaultProvider: provider,
+        agentProviderOrder: resolveDefaultFirstAgentProviderOrder(
+          settings.agentProviderOrder,
+          provider,
+        ),
+      }),
+    updateAgentProviderOrder: (providers: AgentProvider[]): void => {
+      const agentProviderOrder = mergeSelectableAgentProviderOrder(
+        settings.agentProviderOrder,
+        providers,
+      )
+      onChange({
+        ...settings,
+        agentProviderOrder,
+        defaultProvider: normalizeSelectableAgentProviderOrder(agentProviderOrder)[0],
+      })
+    },
     updateLanguage: (language: UiLanguage): void => updateSetting('language', language),
     updateUiTheme: (uiTheme: UiTheme): void => updateSetting('uiTheme', uiTheme),
+    updatePluginEnabled: (pluginId: string, enabled: boolean): void =>
+      updateSetting('disabledPluginIds', setPluginEnabled(settings, pluginId, enabled)),
+    updatePluginContributionEnabled: (
+      pluginId: string,
+      contribution: PluginContribution,
+      enabled: boolean,
+    ): void =>
+      updateSetting(
+        'pluginContributions',
+        setPluginContributionEnabled(settings, pluginId, contribution, enabled),
+      ),
+    updatePixelEffect: (key: keyof PixelEffectSettings, enabled: boolean): void =>
+      updateSetting(key, enabled),
     updateAgentFullAccess: (enabled: boolean): void => updateSetting('agentFullAccess', enabled),
     updateDefaultTerminalProfileId: (profileId: string | null): void =>
       updateSetting('defaultTerminalProfileId', profileId),
@@ -75,6 +115,8 @@ export function createSettingsPanelUpdaters({
       updateSetting('canvasWheelZoomModifier', modifier),
     updateStandardWindowSizeBucket: (bucket: StandardWindowSizeBucket): void =>
       updateSetting('standardWindowSizeBucket', bucket),
+    updateNodeExpandBehavior: (behavior: AgentSettings['nodeExpandBehavior']): void =>
+      updateSetting('nodeExpandBehavior', behavior),
     updateWebsiteWindowPolicy: (policy: AgentSettings['websiteWindowPolicy']): void =>
       updateSetting('websiteWindowPolicy', policy),
     updateBrowserDefaultMode: (mode: AgentSettings['browserDefaultMode']): void =>
@@ -83,8 +125,6 @@ export function createSettingsPanelUpdaters({
       updateSetting('browserSearchEngine', engine),
     updateExperimentalWebsiteWindowPasteEnabled: (enabled: boolean): void =>
       updateSetting('experimentalWebsiteWindowPasteEnabled', enabled),
-    updateExperimentalRemoteWorkersEnabled: (enabled: boolean): void =>
-      updateSetting('experimentalRemoteWorkersEnabled', enabled),
     updateTerminalFontSize: (fontSize: number): void =>
       updateSetting('terminalFontSize', Math.round(fontSize)),
     updateTerminalFontFamily: (family: string | null): void =>

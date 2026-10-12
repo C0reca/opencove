@@ -62,6 +62,7 @@ export type CanvasNodeKind =
   | 'note'
   | 'image'
   | 'document'
+  | 'folder'
   | 'website'
   | 'unknown'
 

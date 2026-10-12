@@ -2,6 +2,12 @@ import type { Terminal } from '@xterm/xterm'
 import type { ResolvedUiTheme } from '@shared/contracts/dto'
 import { resolveUiThemeTerminalScheme, type UiTheme } from '@contexts/settings/domain/uiSettings'
 import {
+  readTerminalAnsiTheme,
+  resolveTerminalAnsiScheme,
+  terminalAnsiThemesEqual,
+  type TerminalAnsiTheme,
+} from './terminalAnsiTheme'
+import {
   resolveActiveUiTheme,
   resolveActiveUiThemeId,
   resolveTerminalThemeFromComputedStyle,
@@ -36,7 +42,7 @@ export type TerminalAppearanceCssTokens = Readonly<
   Partial<Record<TerminalAppearanceCssVariable, string>>
 >
 
-export interface TerminalAppearanceTheme {
+export interface TerminalAppearanceTheme extends TerminalAnsiTheme {
   background: string
   foreground: string
   cursor: string
@@ -89,6 +95,7 @@ function appearanceValuesEqual(
     snapshot.xtermTheme.foreground === value.xtermTheme.foreground &&
     snapshot.xtermTheme.cursor === value.xtermTheme.cursor &&
     snapshot.xtermTheme.selectionBackground === value.xtermTheme.selectionBackground &&
+    terminalAnsiThemesEqual(snapshot.xtermTheme, value.xtermTheme) &&
     TERMINAL_APPEARANCE_CSS_VARIABLES.every(
       variable => snapshot.cssTokens[variable] === value.cssTokens[variable],
     )
@@ -98,24 +105,33 @@ function appearanceValuesEqual(
 export function resolveTerminalAppearanceValue({
   themeId,
   uiScheme,
+  uiTerminalScheme,
   terminalThemeMode,
   xtermTheme,
   cssTokens = {},
 }: {
   themeId: UiTheme
   uiScheme: ResolvedUiTheme
+  uiTerminalScheme?: ResolvedUiTheme
   terminalThemeMode: TerminalThemeMode
   xtermTheme: TerminalAppearanceTheme
   cssTokens?: TerminalAppearanceCssTokens
 }): TerminalAppearanceValue {
   const terminalScheme =
-    terminalThemeMode === 'dark' ? 'dark' : resolveUiThemeTerminalScheme(themeId, uiScheme)
+    terminalThemeMode === 'dark'
+      ? 'dark'
+      : (uiTerminalScheme ?? resolveUiThemeTerminalScheme(themeId, uiScheme))
 
   return {
     themeId,
     uiScheme,
     terminalScheme,
-    xtermTheme: { ...xtermTheme },
+    // A dark contributed palette is already authored for dark terminal semantics.
+    // Keep stripping light-theme ANSI overrides when the user forces a dark terminal.
+    xtermTheme:
+      terminalThemeMode === 'sync-with-ui' && themeId.startsWith('plugin:') && uiScheme === 'dark'
+        ? { ...xtermTheme }
+        : resolveTerminalAnsiScheme(xtermTheme, terminalScheme),
     cssTokens: { ...cssTokens },
   }
 }
@@ -145,8 +161,10 @@ export function resolveCurrentTerminalAppearanceValue({
   return resolveTerminalAppearanceValue({
     themeId: resolveActiveUiThemeId(),
     uiScheme: resolveActiveUiTheme(),
+    uiTerminalScheme: resolveTerminalUiTheme('sync-with-ui'),
     terminalThemeMode,
     xtermTheme: {
+      ...readTerminalAnsiTheme(computedStyle, xtermTheme),
       background:
         xtermTheme?.background ??
         cssTokens['--cove-terminal-background'] ??
@@ -210,6 +228,16 @@ export function resolveDesiredTerminalAppearanceValue({
   probe.setAttribute('aria-hidden', 'true')
   probe.setAttribute('data-cove-terminal-theme-probe', '')
   probe.setAttribute('data-cove-terminal-node-theme', resolveTerminalUiTheme(terminalThemeMode))
+  if (terminalThemeMode === 'sync-with-ui') {
+    // The theme owner writes only explicit token overrides inline. Carry those
+    // into the probe so built-in terminal scopes cannot shadow an authored value.
+    for (const variable of TERMINAL_APPEARANCE_CSS_VARIABLES) {
+      const value = document.documentElement.style.getPropertyValue(variable)
+      if (value) {
+        probe.style.setProperty(variable, value)
+      }
+    }
+  }
 
   const host = document.body ?? document.documentElement
   host.appendChild(probe)

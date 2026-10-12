@@ -13,10 +13,12 @@ import type { NodeControlRuntimeDeps } from './nodeControlUseCases'
 
 export async function deleteNodeForNodeControl(options: {
   store: NodeControlAppStateStore
-  runtime: Pick<NodeControlRuntimeDeps, 'killSession' | 'closeWebsiteNode'>
+  runtime: Pick<NodeControlRuntimeDeps, 'killSession' | 'closeWebsiteNode' | 'closePluginNode'>
   input: DeleteNodeInput
+  assertActive?: () => void
   now: Date
 }): Promise<DeleteNodeResult> {
+  const expectedRevision = await options.store.readAppStateRevision()
   const state = requireNodeControlState(await options.store.readAppState())
   const matched = findNodeForNodeControl(state.workspaces, options.input.nodeId)
   if (!matched) {
@@ -24,9 +26,11 @@ export async function deleteNodeForNodeControl(options: {
   }
 
   const nextWorkspace = removeNodeWithRelations(matched.workspace, matched.node, options.now)
+  options.assertActive?.()
   const revision = await persistNodeControlState(
     options.store,
     replaceNodeControlWorkspace(state, nextWorkspace),
+    expectedRevision,
   )
   const cleanup = { attempted: false, ok: true }
 
@@ -40,6 +44,13 @@ export async function deleteNodeForNodeControl(options: {
   if (matched.node.kind === 'website' && options.runtime.closeWebsiteNode) {
     cleanup.attempted = true
     await Promise.resolve(options.runtime.closeWebsiteNode(matched.node.id)).catch(() => {
+      cleanup.ok = false
+    })
+  }
+
+  if (matched.node.kind === 'plugin' && options.runtime.closePluginNode) {
+    cleanup.attempted = true
+    await Promise.resolve(options.runtime.closePluginNode(matched.node.id)).catch(() => {
       cleanup.ok = false
     })
   }
@@ -91,6 +102,7 @@ function removeNodeWithRelations(
   return {
     ...workspace,
     nodes: nextNodes,
+    collapsedNodeIds: workspace.collapsedNodeIds?.filter(id => id !== target.id),
     spaces: workspace.spaces.map(space => ({
       ...space,
       nodeIds: space.nodeIds.filter(nodeId => nodeId !== target.id),

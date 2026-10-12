@@ -21,7 +21,8 @@ vi.mock('@xyflow/react', () => {
       getViewport: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
       setViewport: vi.fn(),
     }),
-    useStore: (selector: (state: unknown) => unknown) => selector({ nodes: currentNodes }),
+    useStore: (selector: (state: unknown) => unknown) =>
+      selector({ nodes: currentNodes, transform: [0, 0, 1] }),
     useStoreApi: () => ({
       setState: vi.fn(),
       getState: vi.fn(() => ({})),
@@ -210,6 +211,8 @@ describe('WorkspaceCanvas terminal title mode (OpenCode agent renderer)', () => 
       expect(screen.getByTestId('terminal-provider')).toHaveTextContent('opencode')
     })
     expect(screen.getByTestId('terminal-theme-mode')).toHaveTextContent('sync-with-ui')
+    expect(screen.getByTestId('terminal-title').textContent).toBe('qwen')
+    expect(initialNodes[0]?.data.title).toBe('opencode · qwen')
     expect(screen.getByTestId('terminal-link-directory')).toHaveTextContent(
       '/tmp/current-agent-launch',
     )

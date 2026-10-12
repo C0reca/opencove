@@ -3,6 +3,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const SIDEBAR_AUTO_REVEAL_OPEN_DELAY_MS = 140
 const SIDEBAR_AUTO_REVEAL_CLOSE_DELAY_MS = 420
 
+type PointerPosition = {
+  clientX: number
+  clientY: number
+}
+
+function isPointerPositionInsideSidebar(position: PointerPosition): boolean {
+  const sidebar = document.querySelector<HTMLElement>('.workspace-sidebar')
+  const rect = sidebar?.getBoundingClientRect()
+  return (
+    rect !== undefined &&
+    position.clientX >= rect.left &&
+    position.clientX < rect.right &&
+    position.clientY >= rect.top &&
+    position.clientY < rect.bottom
+  )
+}
+
 export function usePrimarySidebarAutoReveal({
   isCollapsed,
   isInteractionActive = false,
@@ -12,7 +29,7 @@ export function usePrimarySidebarAutoReveal({
 }): {
   isPeekOpen: boolean
   handlePointerEnter: () => void
-  handlePointerLeave: () => void
+  handlePointerLeave: (position?: PointerPosition) => void
 } {
   const [isPeekOpen, setIsPeekOpen] = useState(false)
   const openTimerRef = useRef<number | null>(null)
@@ -44,16 +61,17 @@ export function usePrimarySidebarAutoReveal({
   }, [clearCloseTimer, clearOpenTimer])
 
   const scheduleClose = useCallback((): void => {
-    clearCloseTimer()
+    if (closeTimerRef.current !== null) {
+      return
+    }
     closeTimerRef.current = window.setTimeout(() => {
       closeTimerRef.current = null
       if (!isCollapsedRef.current || isPointerInsideRef.current || isInteractionActiveRef.current) {
         return
       }
-
       setIsPeekOpen(false)
     }, SIDEBAR_AUTO_REVEAL_CLOSE_DELAY_MS)
-  }, [clearCloseTimer])
+  }, [])
 
   useEffect(() => clearTimers, [clearTimers])
 
@@ -61,26 +79,60 @@ export function usePrimarySidebarAutoReveal({
     if (!isCollapsed) {
       clearTimers()
       setIsPeekOpen(false)
-      return
-    }
-
-    if (isInteractionActive) {
+    } else if (isInteractionActive) {
       clearTimers()
       setIsPeekOpen(true)
-      return
-    }
-
-    if (isPeekOpen && !isPointerInsideRef.current) {
+    } else if (isPeekOpen && !isPointerInsideRef.current) {
       scheduleClose()
     }
   }, [clearTimers, isCollapsed, isInteractionActive, isPeekOpen, scheduleClose])
+
+  const handlePointerLeave = useCallback(
+    (position?: PointerPosition): void => {
+      // A portal can generate a DOM leave without leaving the visible panel.
+      isPointerInsideRef.current = position ? isPointerPositionInsideSidebar(position) : false
+      if (isPointerInsideRef.current) {
+        clearCloseTimer()
+        return
+      }
+      clearOpenTimer()
+      if (!isCollapsedRef.current || isInteractionActiveRef.current) {
+        clearCloseTimer()
+        return
+      }
+      scheduleClose()
+    },
+    [clearCloseTimer, clearOpenTimer, scheduleClose],
+  )
+
+  useEffect(() => {
+    if (!isCollapsed || !isPeekOpen) {
+      return
+    }
+
+    // Only the project icon initiates a peek. Once open, the entire navigation
+    // panel keeps it open, including when a portal covers the pointer. Menu
+    // dismissal (click or keyboard) never overrides the current hover location.
+    const trackPointer = (event: PointerEvent): void => {
+      if (event.pointerType !== 'touch') {
+        handlePointerLeave(event)
+      }
+    }
+    window.addEventListener('pointermove', trackPointer, true)
+    window.addEventListener('pointerdown', trackPointer, true)
+    window.addEventListener('pointerup', trackPointer, true)
+    return () => {
+      window.removeEventListener('pointermove', trackPointer, true)
+      window.removeEventListener('pointerdown', trackPointer, true)
+      window.removeEventListener('pointerup', trackPointer, true)
+    }
+  }, [handlePointerLeave, isCollapsed, isPeekOpen])
 
   const handlePointerEnter = useCallback((): void => {
     isPointerInsideRef.current = true
     if (!isCollapsed) {
       return
     }
-
     clearTimers()
     openTimerRef.current = window.setTimeout(() => {
       openTimerRef.current = null
@@ -90,25 +142,9 @@ export function usePrimarySidebarAutoReveal({
       ) {
         return
       }
-
       setIsPeekOpen(true)
     }, SIDEBAR_AUTO_REVEAL_OPEN_DELAY_MS)
   }, [clearTimers, isCollapsed])
-
-  const handlePointerLeave = useCallback((): void => {
-    isPointerInsideRef.current = false
-    if (!isCollapsed) {
-      return
-    }
-
-    clearOpenTimer()
-    if (isInteractionActive) {
-      clearCloseTimer()
-      return
-    }
-
-    scheduleClose()
-  }, [clearCloseTimer, clearOpenTimer, isCollapsed, isInteractionActive, scheduleClose])
 
   return { isPeekOpen, handlePointerEnter, handlePointerLeave }
 }

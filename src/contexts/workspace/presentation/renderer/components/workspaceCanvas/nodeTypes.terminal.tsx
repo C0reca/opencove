@@ -8,11 +8,7 @@ import { useScrollbackStore } from '../../store/useScrollbackStore'
 import type { NodeFrame, TerminalNodeData } from '../../types'
 import { isResumeSessionBindingVerified } from '../../utils/agentResumeBinding'
 import { resolveAgentPresentation } from '../../utils/agentPresentation'
-import {
-  findLinkedTaskTitleForAgent,
-  providerTitlePrefix,
-  resolveAgentDisplayTitle,
-} from '../../utils/agentTitle'
+import { findLinkedTaskTitleForAgent, resolveAgentDisplayLabel } from '../../utils/agentTitle'
 import { readNodePositionFromStoreState } from './nodePosition'
 import type { UpdateNodeScrollback } from './types'
 
@@ -127,16 +123,15 @@ function WorkspaceCanvasTerminalNodeTypeComponent({
       data.agent.taskId ?? null,
     )
   })
-  const resolvedTitle =
-    data.kind === 'agent' && data.agent
-      ? data.titlePinnedByUser === true
-        ? data.title.trim()
-        : resolveAgentDisplayTitle({
-            provider: data.agent.provider,
-            linkedTaskTitle,
-            fallbackTitle: data.title,
-          })
-      : data.title
+  const titleProvider = data.kind === 'agent' ? (data.agent?.provider ?? null) : overlayProvider
+  const resolvedTitle = titleProvider
+    ? resolveAgentDisplayLabel({
+        provider: titleProvider,
+        linkedTaskTitle,
+        fallbackTitle: data.title,
+        preferFallbackTitle: data.titlePinnedByUser === true,
+      })
+    : data.title
   const executionDirectory =
     data.kind === 'agent'
       ? (data.agent?.executionDirectory ?? null)
@@ -152,13 +147,6 @@ function WorkspaceCanvasTerminalNodeTypeComponent({
         documentNavigation?.openFileLink(id, request) ?? Promise.resolve(false)
       }
       title={resolvedTitle}
-      fixedTitlePrefix={
-        data.kind === 'agent' && data.agent
-          ? `${providerTitlePrefix(data.agent.provider)} · `
-          : overlayProvider
-            ? `${providerTitlePrefix(overlayProvider)} · `
-            : null
-      }
       kind={data.kind}
       isAgentPresentation={isAgentTreated}
       labelColor={labelColor}

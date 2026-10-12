@@ -14,6 +14,7 @@
 > - Window：`docs/ui/WINDOW_UI_STANDARD.md`
 > - Task：`docs/ui/TASK_UI_STANDARD.md`
 > - Viewport：`docs/ui/VIEWPORT_NAVIGATION_STANDARD.md`
+- Spatial Pixel：`docs/ui/SPATIAL_PIXEL_THEME.md`
 
 ---
 
@@ -34,10 +35,10 @@
 
 ### 2.1 单一真相
 
-- 持久化设置：`settings.uiTheme: UiTheme`，取值见 `src/contexts/settings/domain/uiSettings.ts`（当前为 `'system' | 'light' | 'dark' | 'ember' | 'ember-light'`）。
+- 持久化设置：`settings.uiTheme: UiTheme`，取值见 `src/contexts/settings/domain/uiSettings.ts`（内置主题及 `plugin:<plugin-id>:<theme-id>` 扩展标识）。
 - Renderer 主题入口（**两个互补的 hook**，共同构成命名主题扩展点）：
   - `<html data-cove-theme="light|dark">` —— 解析后的基础配色，所有 `--cove-*` token 默认基于此切换；`system` 会跟随 `prefers-color-scheme` 计算出 light/dark。
-  - `<html data-cove-theme-id="<UiTheme>">` —— 当前选中的命名主题 id。命名主题通过 `:root[data-cove-theme-id='<id>']` 选择器覆盖 `--cove-*` token，与基础配色解耦。当前内置主题包含 `ember`；用户提供主题包的 loader、安全沙箱和 UI 入口不在当前公开能力内。
+  - `<html data-cove-theme-id="<UiTheme>">` —— 当前选中的命名主题 id。命名主题通过 `:root[data-cove-theme-id='<id>']` 选择器覆盖 `--cove-*` token，与基础配色解耦。当前内置主题包含 `ember`、`ember-light`、`pixel` 与 `pixel-light`；插件可以通过声明式 `contributes.themes` 接入颜色、材质、尺寸、字体、动效与受作用域约束的组件样式；详见 [插件主题契约](../plugins/THEMES.md)。
 - 添加一个新内置主题的步骤：① 在 `UI_THEMES` 中登记 id；② 在 `UI_THEME_DESCRIPTORS` 声明 `baseScheme`、`terminalScheme` 与 `i18nKey`；③ 提供 `styles/themes/<id>.css`，以 `:root[data-cove-theme-id='<id>']` 选择器覆盖需要的 `--cove-*` token。
 - `baseScheme` 与 `terminalScheme` 是两个独立语义：前者决定应用 shell 的 light/dark token，后者决定 xterm 与内嵌 TUI 的配色协议。`ember-light` 的 shell 是 light，但 terminal/OpenCode 语义固定为 dark。
 - 每个 xterm 实例必须通过一个 revisioned `TerminalAppearanceSnapshot` 应用主题。快速连续切换采用 final-wins：每帧至多应用/刷新一次最新 snapshot；xterm theme、OpenCode OSC/CSI 与 Find decoration 必须消费同一份 **applied** snapshot，不能各自读取时序不同的 desired theme。
@@ -125,25 +126,101 @@
 - 所有文本/边框/输入框必须基于 token；尤其避免 `#fff` / `#ccc` 这类暗色假设。
 - provider/card 标题与错误信息必须可读（Light/Dark 都可读）。
 - 页面 registry 是 Settings 信息架构的单一来源：规范页面 id、别名、导航分组、标题/说明键和滚动目标；侧栏、动态页头、搜索结果与窄窗选择器必须共同消费它，禁止各自维护映射。
-- 桌面侧栏按“应用 / 工作区 / 连接 / 高级”分组；项目使用独立、可折叠分组。二级入口可供搜索或深链定位，但不重复占用主导航。
+- 桌面主导航按通用、外观、画布、Agent、终端、快捷操作、连接组织，高级固定在底部。范围选择器区分应用与项目；项目范围只展示项目拥有的字段，不暗示全局偏好支持项目覆盖。旧页面 id 保留为规范页面与锚点别名。
 - 页头必须随当前页面显示对应标题和简短说明，标题与说明来自 registry，不使用泛化的固定标题替代页面上下文。
 - Settings 内容层级固定为 `Page H2 → Group H3 →（必要时）Module H4 → Row`；Group 标题与说明必须位于内容面之外，不能用 `<strong>` 冒充结构标题。
-- 每个 Group 最多一个共享的轻量内容面，内部继续使用扁平设置行和细分隔线；Module 只用标题、说明、留白与 hairline 区分，不得再拥有独立背景、圆角或 header surface。Agent、Endpoint 等具备独立身份与状态的重复实体可保留 Entity Card，但不能再套 Group Body Card。
+- 普通 Group 和 Module 使用透明内容面、留白与细分隔线，避免嵌套卡片。设置行左侧是名称与必要说明，右侧控件按内容宽度排列；窄内容区换行，开关仍与标签同排。Agent 提供方使用列表进入详情，返回恢复列表焦点和滚动；安装状态与错误保持可见。
+- Agent 列表使用紧凑内容行和独立拖动手柄，鼠标与键盘排序共用同一提交入口。首个可选 Agent 即默认 Agent，顺序与默认值必须原子更新；旧设置以已有默认值对齐顺序，隐藏提供方保留兼容数据。纵向摘要不得继承横向布局的 `flex-basis`，行高由文字内容决定。
+- 连接设置按本机运行、浏览器访问、远程连接组织。密码与局域网访问属于浏览器访问；远程机器属于远程连接。去除实验性入口门禁不等于启用网络监听，打开设置不得改变 Worker 模式、启动进程或修改 Web 访问权限。
+- 远程机器列表只保留一个添加入口，空列表不重复渲染操作卡片；打开 Web UI 的行只在运行时确认可访问时出现，刷新与错误反馈始终可达。终端字体预览使用独立的静态窗口与终端主题 token，字号只影响内容，不创建 PTY。
 - 单项页面不为了形式统一强加空洞层级；条件内容不得产生空 Group；重排时必须保留搜索/深链依赖的 `settings-section-*` anchor。
-- 窄窗口使用顶部 page selector 和单列内容，不能把桌面侧栏压缩成不可读的窄栏；页面切换后仍需保持标题、说明和目标内容可达。
-- Settings 容器必须具备 `dialog` 语义、可访问名称和 `aria-modal`。打开后把焦点移入面板，关闭后恢复到触发控件；所有交互必须有清晰的 `:focus-visible`。
+- 窄窗口使用顶部范围与页面选择器、单列内容；应用页面选择器不混入项目。搜索在页头，所有导航入口（含外部 props）共用清理路径，避免旧 provider 搜索请求在重挂后重放。搜索先挂载详情、展开原生 details，再定位并聚焦目标。
+- Settings 是主内容区的命名页面，铺满画布所在区域，保留应用 Header 与 Sidebar 导航。
+  不使用 Dialog、遮罩、aria-modal 或焦点陷阱；顶部画布入口与设置关闭按钮可返回工作区。
+  点击 Sidebar 项目、Space、Agent 或命令中心中的画布目的地也应退出设置，再执行导航。
+- 设置开关仍由 shell 的单一状态持有，配置持久化与页面内导航分别沿用原 owner。
+  画布保持挂载和原尺寸；覆盖期间通过共享 inert lease 禁止输入并从辅助技术隐藏，
+  不得使用 display:none、重新创建 PTY 或更改 viewport。缩放预览期间只恢复画布可见性。
+- 桌面打开设置聚焦搜索，移动端聚焦关闭按钮以避免唤起软键盘；显式关闭返回导航入口，
+  Sidebar 导航保留目标焦点。弹层交接取消旧 Dialog 的延迟焦点恢复，嵌套菜单/弹窗先处理 Escape。
+  所有交互保留清晰的 :focus-visible，响应式布局根据设置内容区域宽度切换。
 - 搜索支持方向键选择结果、`Enter` 跳转和 `Escape` 退出；查询非空时首次 `Escape` 先清空查询，再次 `Escape` 关闭面板。关闭按钮必须有可访问名称。
+
+- 外观点阵预览必须消费现有画布绘制、mask、assembly、burst 与调度器。它使用独立 DOM 类和局部时钟，不创建真实 React Flow 节点、不启动 PTY、不发运行时创建/关闭事件；离屏、减少动态效果与关闭开关均需停止不必要的循环。
+
+- 默认主题为 Pixel；显式保存的其他主题与各项像素开关不因升级或切换主题被覆盖。
+  Agent 两侧流光只消费 `resolveAgentPresentation` 的 Working 状态（含终端中的 Agent）；
+  PTY 输出不能作为 Working 的判据，恢复中或降级观测不显示流光。流光复用画布级调度器、
+  主题色与可见窗口投影，不改变节点布局、焦点或运行状态。独立开关关闭、非 Working、
+  离屏及减少动态效果时停止；无动态内容时不维持动画循环。
 
 实现锚点：
 - 面板样式：`src/app/renderer/styles/settings-panel.css`
 - 分组原语：`src/contexts/settings/presentation/renderer/settingsPanel/SettingsGroup.tsx`
-- 主题选择：`src/contexts/settings/presentation/renderer/settingsPanel/GeneralSection.tsx`
+- 主题选择：`src/contexts/settings/presentation/renderer/settingsPanel/AppearanceSection.tsx`
 
-参考原则：Apple HIG Settings（稳定 pane 与相关设置分组）、Windows App Settings（单列、受约束宽度与 section header）、GNOME HIG Boxed Lists（短静态偏好使用共享列表面，标题位于列表之外）。
+参考原则：[VS Code Settings editor](https://code.visualstudio.com/docs/configure/settings)
+（主区域设置页、搜索与作用域）、[React 状态保留](https://react.dev/learn/preserving-and-resetting-state)
+（保持工作画布树位置）、[HTML inert](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/inert)
+（不可见画布的交互隔离）。分组沿用 Apple HIG Settings、Windows App Settings 与 GNOME HIG Boxed Lists。
 
 ---
 
 ## 6) 测试与验收（UI 变更必须做）
+
+### Sidebar 导航契约
+
+- 桌面 Sidebar 由固定宽度项目栏与单个项目导航组成。收起仅保留项目图标，不把 Space / Agent
+  压缩成图标树；展开导航显示 Space 与各自的 Agent，不增加独立的“项目画布”条目。
+- 设置入口固定在项目栏底部，不随项目列表滚动；展开、收起与移动抽屉共用同一入口。
+  移动抽屉交接到设置后关闭，设置退出返回导航按钮，不恢复已卸载的抽屉按钮焦点。
+- 悬停项目只产生临时导航预览，不写 active workspace、active Space、viewport 或执行目录。
+  点击项目沿用该项目保存的画布视野；点击 Space / Agent 才发送定位意图。
+- 固定偏好、分组折叠、条目隐藏与筛选由设置 owner 保存；悬停、拖动锁定与移动抽屉属于
+  renderer 临时状态。Sidebar 的可见性独立于画布中 Space / 窗口的收起状态。
+  收起或打开覆盖式导航不能写入 viewport，也不能重建终端实例。
+- 窄屏隐藏整个项目栏，导航按钮打开覆盖式抽屉，右侧至少保留 48px 画布关闭区域。
+  抽屉拦截画布输入、锁定焦点，Escape / 遮罩关闭后恢复触发按钮焦点。项目切换保留抽屉；
+  Space / Agent 导航关闭抽屉。移动 Agent 导航只定位，不请求输入焦点；桌面导航可聚焦输入。
+- Remote 标记只来自项目唯一 Mount 的远端 endpoint，不来自浏览器运行模式。多目录或混合
+  Mount 不显示整项目 remote；位置详情在标记或项目目录管理中查看，不常驻项目路径。
+- Space 使用四角框图标，折叠控制置于行右侧。标记通过淡标题底色与贯穿分组的侧线展示，
+  Agent 自有标记通过短侧线与淡底色展示。Agent 不继承 Space 标记，品牌图标保持原样；
+  Space / Agent 导航不显示选中描边或定位箭头；导航意图、运行状态符号及
+  标签色是三个独立语义。项目角标仅汇总待用户处理的 Agent 数量。
+- 项目、Space、同组 Agent 的手动排序保留，不因输出活动自动重排。触控行与操作至少 44px。
+- 项目标题处的按钮循环切换「专注 / 正常 / 全部」；默认正常，仅显示未隐藏条目。专注
+  显示置顶 Space 及其未隐藏 Agent；只置顶 Agent 时保留其所属 Space，不显示同组其他
+  未置顶 Agent。全部包含隐藏条目。切换不修改运行状态、排序或分组折叠偏好；待处理状态
+  只更新指示，不自动取消隐藏或展开条目。
+- 普通 Space / Agent 的更多操作仅在悬停、键盘焦点或触屏模式显示。被筛选显示的隐藏条目
+  使用弱化文字与常驻隐藏图标，图标直接恢复。已置顶条目在悬停时显示实心置顶按钮，
+  点击直接取消置顶。
+  隐藏 Space 对子 Agent 有继承效力：先恢复父 Space，不能通过子项绕过；恢复父 Space
+  保留每个 Agent 自己的隐藏偏好。偏好以项目与条目 ID 作用域保存，不由节点输出重写。
+
+参考原则：VS Code Sidebar 的稳定项目导航与分组动作，GNOME Sidebar 的清晰导航层级。
+此处沿用应用已有单目录执行模型，不引入多 repo 的隐式目录选择。
+
+### 搜索与快捷控制契约
+
+- 命令中心负责命令、项目和 Space 导航；项目搜索负责当前项目的 Space、任务与笔记。
+  入口与显示方式可变化，筛选、定位和设置写入仍由原有 owner 负责。
+- 命令中心与项目搜索共用 Sidebar 的项目图标、Space 四角框和标签侧线语义。
+  项目目录保留为搜索关键字，不作为常驻副标题；remote 只表示唯一 Mount 的远端 endpoint。
+- 桌面项目搜索是可调整宽度的非模态侧栏，控制中心是锚定按钮的非模态 Popover；
+  窄屏分别使用近全屏搜索 Dialog 与底部控制 Dialog，触控目标至少 44px。
+- 命令中心遵循 editable combobox 模式：输入框保留 DOM focus，方向键通过
+  `aria-activedescendant` 选择结果，Enter 执行；IME 合成过程不执行导航或命令。
+  键盘滚动只作用于结果列表，不得移动外层画布。
+- 模态界面复用共享 Dialog 的 inert、Tab 约束与焦点恢复。手机打开搜索先聚焦关闭控件，
+  避免自动唤起软键盘；定位后关闭搜索，返回导航控件，不聚焦终端输入。
+  弹层交接后旧界面不得通过延迟恢复抢走新界面的焦点。
+- 控制中心开关保留标签与真实 checked 状态，不重复显示开/关状态文字；
+  所有主题来自既有主题 registry，选项使用轻量预览与单选语义。控制中心与设置页共用插件主题可用性规则，
+  展示已启用且就绪的主题名称与来源；禁用或卸载时隐藏选项，但不改写用户保存的主题选择。
+
+参考：WAI-ARIA APG Dialog (Modal) 与 Combobox 的焦点约束、返回目标与输入焦点模型。
 
 ### 6.1 最低验收
 

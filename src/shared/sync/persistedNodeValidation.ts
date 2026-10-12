@@ -10,8 +10,10 @@ import type {
   PersistedTaskNodeData,
   PersistedTerminalAgentSessionBinding,
   PersistedWebsiteNodeData,
+  PersistedPluginNodeData,
   PersistedWorkspaceNodeKind,
 } from '@shared/contracts/persistedAppState'
+import { isFolderNodeData } from '@shared/utils/folderNodeData'
 import {
   isAgentProvider,
   isAgentRuntimeStatus,
@@ -182,6 +184,17 @@ function isWebsiteNodeData(value: unknown): value is PersistedWebsiteNodeData {
   )
 }
 
+function isPluginNodeData(value: unknown): value is PersistedPluginNodeData {
+  return (
+    isRecord(value) &&
+    typeof value.pluginId === 'string' &&
+    value.pluginId.trim().length > 0 &&
+    isFiniteNumber(value.schemaVersion) &&
+    (value.repoPath === undefined || typeof value.repoPath === 'string') &&
+    (value.mountId === undefined || isNullableString(value.mountId))
+  )
+}
+
 function isAgentPayloadForKind(kind: PersistedWorkspaceNodeKind, value: unknown): boolean {
   if (kind === 'terminal') {
     return value === undefined || value === null || isTerminalAgentSessionBinding(value)
@@ -204,8 +217,12 @@ function isNodePayloadForKind(kind: PersistedWorkspaceNodeKind, value: unknown):
       return value === undefined || value === null || isImageNodeData(value)
     case 'document':
       return value === undefined || value === null || isDocumentNodeData(value)
+    case 'folder':
+      return isFolderNodeData(value)
     case 'website':
       return value === undefined || value === null || isWebsiteNodeData(value)
+    case 'plugin':
+      return value === undefined || value === null || isPluginNodeData(value)
     default:
       return value === undefined || value === null
   }

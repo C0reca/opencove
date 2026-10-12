@@ -31,6 +31,7 @@ function normalizeCanvasNodeKind(kind: unknown): CanvasNodeKind {
     case 'note':
     case 'image':
     case 'document':
+    case 'folder':
     case 'website':
       return kind
     default:
@@ -364,6 +365,7 @@ export function registerSpaceHandlers(
     validate: normalizeCreateChildPayload,
     handle: async (_ctx, payload): Promise<CreateChildSpaceResult> => {
       const store = await getPersistenceStore()
+      const expectedRevision = await store.readAppStateRevision()
       const normalized = normalizePersistedAppState(await store.readAppState())
       if (!normalized) {
         throw createAppError('common.invalid_input', {
@@ -427,7 +429,7 @@ export function registerSpaceHandlers(
         ),
       }
 
-      const writeResult = await store.writeAppState(nextState)
+      const writeResult = await store.writeAppState(nextState, { expectedRevision })
       if (!writeResult.ok) {
         throw createAppError(writeResult.error)
       }

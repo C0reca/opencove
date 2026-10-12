@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { Edge, Node, ReactFlowInstance, Viewport } from '@xyflow/react'
-import type { TerminalNodeData, WorkspaceSpaceState } from '../../../types'
+import type { TerminalNodeData } from '../../../types'
 import { focusNodeInViewport } from '../helpers'
+import { requestViewportNodeInputFocus } from '../requestViewportNodeInputFocus'
 
 export function useWorkspaceCanvasViewportNavigation({
   workspaceId,
@@ -9,11 +10,12 @@ export function useWorkspaceCanvasViewportNavigation({
   restoredViewportWorkspaceIdRef,
   reactFlow,
   focusNodeId,
+  focusNodeInput,
   focusSpaceId,
   focusSequence,
   nodes,
   nodesRef,
-  spaces,
+  expandNode,
   focusSpaceInViewport,
   focusNodeTargetZoom,
 }: {
@@ -22,11 +24,12 @@ export function useWorkspaceCanvasViewportNavigation({
   restoredViewportWorkspaceIdRef: React.MutableRefObject<string | null>
   reactFlow: ReactFlowInstance<Node<TerminalNodeData>, Edge>
   focusNodeId?: string | null
+  focusNodeInput?: boolean
   focusSpaceId?: string | null
   focusSequence?: number
   nodes: Node<TerminalNodeData>[]
   nodesRef: React.MutableRefObject<Node<TerminalNodeData>[]>
-  spaces: WorkspaceSpaceState[]
+  expandNode: (id: string) => Node<TerminalNodeData> | undefined
   focusSpaceInViewport: (spaceId: string) => boolean
   focusNodeTargetZoom: number
 }): void {
@@ -40,6 +43,10 @@ export function useWorkspaceCanvasViewportNavigation({
 
   const focusedNodeRequestKeyRef = useRef<string | null>(null)
   const focusedSpaceRequestKeyRef = useRef<string | null>(null)
+  const cancelInputFocusRef = useRef<(() => void) | null>(null)
+
+  // Cancel the previous workspace before layout navigation installs its next input request.
+  useLayoutEffect(() => () => cancelInputFocusRef.current?.(), [workspaceId])
 
   useLayoutEffect(() => {
     if (!reactFlow.viewportInitialized) {
@@ -50,6 +57,12 @@ export function useWorkspaceCanvasViewportNavigation({
     const sequence = focusSequence ?? 0
     const nodeRequestKey = focusNodeId ? `${workspaceId}:node:${focusNodeId}:${sequence}` : null
     const spaceRequestKey = focusSpaceId ? `${workspaceId}:space:${focusSpaceId}:${sequence}` : null
+    if (!nodeRequestKey) {
+      focusedNodeRequestKeyRef.current = null
+    }
+    if (!spaceRequestKey) {
+      focusedSpaceRequestKeyRef.current = null
+    }
     const hasPendingNodeRequest =
       nodeRequestKey !== null &&
       (isWorkspaceViewportPending || focusedNodeRequestKeyRef.current !== nodeRequestKey)
@@ -58,20 +71,28 @@ export function useWorkspaceCanvasViewportNavigation({
       (isWorkspaceViewportPending || focusedSpaceRequestKeyRef.current !== spaceRequestKey)
 
     if (!isWorkspaceViewportPending && !hasPendingNodeRequest && !hasPendingSpaceRequest) {
+      if (!nodeRequestKey || focusNodeInput !== true) {
+        cancelInputFocusRef.current?.()
+      }
       return
     }
+
+    cancelInputFocusRef.current?.()
 
     const applyViewportIntent = (): void => {
       restoredViewportWorkspaceIdRef.current = workspaceId
 
       if (hasPendingNodeRequest && nodeRequestKey && focusNodeId) {
-        const target = nodesRef.current.find(node => node.id === focusNodeId)
+        const target = expandNode(focusNodeId)
         if (target) {
           focusedNodeRequestKeyRef.current = nodeRequestKey
           focusNodeInViewport(reactFlow, target, {
             duration: 220,
             zoom: focusNodeTargetZoom,
           })
+          if (focusNodeInput === true) {
+            cancelInputFocusRef.current = requestViewportNodeInputFocus(target.id)
+          }
           return
         }
       }
@@ -96,6 +117,7 @@ export function useWorkspaceCanvasViewportNavigation({
     applyViewportIntent()
   }, [
     focusNodeId,
+    focusNodeInput,
     focusNodeTargetZoom,
     focusSequence,
     focusSpaceId,
@@ -105,7 +127,7 @@ export function useWorkspaceCanvasViewportNavigation({
     persistedViewport,
     reactFlow,
     restoredViewportWorkspaceIdRef,
-    spaces,
+    expandNode,
     workspaceId,
   ])
 }

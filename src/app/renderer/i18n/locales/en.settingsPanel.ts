@@ -1,3 +1,7 @@
+import { enSettingsPanelAgent } from './en.settingsPanel.agent'
+import { enSettingsPanelPlugins } from './en.settingsPanel.plugins'
+import { enSettingsPanelAppearanceNext } from './en.settingsPanel.appearanceNext'
+import { enSettingsPanelAgentDetail } from './en.settingsPanel.agentDetail'
 import { enTerminalDisplayCalibration } from './en.terminalDisplayCalibration'
 import { enSettingsPanelEndpoints } from './en.settingsPanel.endpoints'
 import { enSettingsPanelAgentExecutable } from './en.settingsPanel.agentExecutable'
@@ -7,6 +11,9 @@ import { enSettingsPanelWorkspace } from './en.settingsPanel.workspace'
 import { enWorkspaceCanvasNavigationShortcutCommands } from './en.settingsPanel.shortcuts.workspaceCanvasNavigation'
 
 export const enSettingsPanel = {
+  plugins: enSettingsPanelPlugins,
+  agentDetail: enSettingsPanelAgentDetail,
+  appearanceNext: enSettingsPanelAppearanceNext,
   title: 'Settings',
   search: {
     label: 'Search settings',
@@ -14,6 +21,7 @@ export const enSettingsPanel = {
     noResults: 'No matching settings',
   },
   nav: enSettingsPanelLayout.nav,
+  navigation: enSettingsPanelLayout.navigation,
   navGroups: enSettingsPanelLayout.navGroups,
   pageDescriptions: enSettingsPanelLayout.pageDescriptions,
   groups: enSettingsPanelLayout.groups,
@@ -29,6 +37,8 @@ export const enSettingsPanel = {
       dark: 'Dark',
       ember: 'Ember',
       emberLight: 'Ember Light',
+      pixel: 'Pixel',
+      pixelLight: 'Pixel Light',
     },
     interfaceFontSize: 'Interface Font Size',
     terminalFontSize: 'Terminal Font Size',
@@ -77,25 +87,7 @@ export const enSettingsPanel = {
   },
   appearance: enSettingsPanelLayout.appearance,
   terminal: enSettingsPanelLayout.terminal,
-  agent: {
-    title: 'Agent',
-    defaultAgentLabel: 'Default Agent',
-    defaultAgentHelp: 'The default AI provider for new tasks and terminals.',
-    agentListLabel: 'Agents',
-    agentProviderOrderLabel: 'Agent Menu Order',
-    agentProviderOrderHelp:
-      'Set default, order, install, model, and launch environment from one list.',
-    defaultBadge: 'Default',
-    configure: 'Configure',
-    done: 'Done',
-    envSummary_one: '{{count}} environment variable',
-    envSummary_other: '{{count}} environment variables',
-    envSummaryNone: 'No environment variables',
-    moveUp: 'Move up',
-    moveDown: 'Move down',
-    fullAccessLabel: 'Full Access Mode',
-    fullAccessHelp: 'Disable sandbox and manual approvals for agents.',
-  },
+  agent: enSettingsPanelAgent,
   agentEnv: {
     title: 'Agent Environment Variables',
     help: 'Add or override environment variables when starting an agent.',
@@ -204,6 +196,12 @@ export const enSettingsPanel = {
       large: 'Large',
     },
     viewportTransitionLabel: 'Viewport Transition',
+    nodeExpandBehaviorLabel: 'Window Expansion',
+    nodeExpandBehaviorHelp: 'Choose how space is made when you reopen a collapsed window.',
+    nodeExpandBehavior: {
+      'push-away': 'Expand in place, push other windows aside',
+      'find-space': 'Expand in nearby free space',
+    },
     viewportTransitionHelp:
       'Choose how the canvas moves between windows and spaces. Respects reduced motion in system settings.',
     viewportTransition: { fly: 'Zoom Flight', slide: 'Smooth Slide' },
@@ -232,7 +230,7 @@ export const enSettingsPanel = {
     workerWebUi: {
       title: 'Worker Web UI',
       securityTitle: 'Access Security',
-      help: 'Open the experimental browser UI served by the Local Worker.',
+      help: 'Open the browser UI served by the Local Worker.',
       enabledLabel: 'Enable Web UI',
       enabledHelp:
         'Turns the Worker-hosted Web UI and debug shell on or off without restarting terminals.',
@@ -373,6 +371,10 @@ export const enSettingsPanel = {
         title: 'Create Terminal',
         help: 'Create a terminal from the visual center of the root canvas.',
       },
+      workspaceCanvasCreateAgent: {
+        title: 'Start Agent',
+        help: 'Start the default Agent at the canvas center. Inputs, terminals, and editors keep Select All.',
+      },
       workspaceCanvasCycleSpacesForward: {
         title: 'Next Space',
         help: 'Switch to the next space in top-left pill order. The All pill is excluded.',
@@ -423,9 +425,9 @@ export const enSettingsPanel = {
     errors: {
       remoteRequired: 'Remote machine hostname, port, and access token are required.',
       remoteExperimentalDisabled:
-        'Remote machines are experimental. Enable remote machines in Worker & Connections to continue.',
+        'Remote machines are experimental. Enable remote machines in Connections to continue.',
       stopLocalWorkerFirst: 'Stop the Local Worker before switching to Standalone.',
-      enableLocalRequiresRestart: 'Enable Local Worker mode and restart before starting it.',
+      enableLocalRequiresRestart: 'This session is not using a local Worker.',
     },
     home: {
       title: 'Worker Mode',
@@ -466,7 +468,7 @@ export const enSettingsPanel = {
     },
     local: {
       title: 'Local Worker',
-      help: 'Loopback-only (127.0.0.1) + token. Use SSH tunnels for remote access. Worker Web UI is in Worker & Connections.',
+      help: 'Loopback-only (127.0.0.1) + token. Use SSH tunnels for remote access. Worker Web UI is in Connections.',
       statusLabel: 'Worker Status',
       status: {
         running: 'Running',

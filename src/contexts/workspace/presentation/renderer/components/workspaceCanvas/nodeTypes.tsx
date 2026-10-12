@@ -5,12 +5,15 @@ import type { BrowserSearchEngineId } from '@contexts/settings/domain/browserSet
 import type { NodeLabelColorOverride } from '@shared/types/labelColor'
 import type { NodeFrame, WorkspaceSpaceState } from '../../types'
 import { WorkspaceCanvasDocumentNodeType } from './nodeTypes.document'
+import { WorkspaceCanvasFolderNodeType } from './nodeTypes.folder'
+import { resolveFilesystemNodeMountId } from './filesystemNodeBinding'
 import { WorkspaceCanvasImageNodeType } from './nodeTypes.image'
 import { WorkspaceCanvasNoteNodeType } from './nodeTypes.note'
 import { WorkspaceCanvasRoleNodeType } from './nodeTypes.role'
 import { WorkspaceCanvasTaskNodeType } from './nodeTypes.task'
 import { WorkspaceCanvasTerminalNodeType } from './nodeTypes.terminal'
 import { WorkspaceCanvasWebsiteNodeType } from './nodeTypes.website'
+import { WorkspaceCanvasPluginNodeType } from './nodeTypes.plugin'
 import { useNodePosition } from './nodePosition'
 import type {
   QuickUpdateTaskRequirement,
@@ -21,6 +24,7 @@ import type {
 } from './types'
 import type { WorkspaceCanvasNodeTypeProps } from './nodeTypes.types'
 import { useTerminalDisplayAlignment } from './TerminalDisplayAlignmentContext'
+import { WindowCollapsePresentation } from './collapse/WindowCollapsePresentation'
 
 interface WorkspaceCanvasNodeTypesParams {
   spacesRef: MutableRefObject<WorkspaceSpaceState[]>
@@ -173,12 +177,13 @@ export function useWorkspaceCanvasNodeTypes({
       )
     }
 
-    const DocumentNodeType = ({ data, id }: WorkspaceCanvasNodeTypeProps) => {
+    const FilesystemNodeType = ({ data, id }: WorkspaceCanvasNodeTypeProps) => {
       const nodePosition = useNodePosition(id)
-      const targetMountId =
-        spacesRef.current.find(candidate => candidate.nodeIds.includes(id))?.targetMountId ?? null
+      const targetMountId = resolveFilesystemNodeMountId(id, data, spacesRef.current)
+      const Component =
+        data.kind === 'folder' ? WorkspaceCanvasFolderNodeType : WorkspaceCanvasDocumentNodeType
       return (
-        <WorkspaceCanvasDocumentNodeType
+        <Component
           data={data}
           id={id}
           nodePosition={nodePosition}
@@ -241,7 +246,7 @@ export function useWorkspaceCanvasNodeTypes({
       )
     }
 
-    return {
+    const nodeTypes = {
       terminalNode: TerminalNodeType,
       noteNode: ({ data, id }: WorkspaceCanvasNodeTypeProps) => {
         return (
@@ -261,8 +266,19 @@ export function useWorkspaceCanvasNodeTypes({
           />
         )
       },
-      documentNode: DocumentNodeType,
+      documentNode: FilesystemNodeType,
+      folderNode: FilesystemNodeType,
       websiteNode: WebsiteNodeType,
+      pluginNode: ({ data, id }: WorkspaceCanvasNodeTypeProps) => (
+        <WorkspaceCanvasPluginNodeType
+          data={data}
+          id={id}
+          closeNodeRef={closeNodeRef}
+          resizeNodeRef={resizeNodeRef}
+          selectNode={selectNode}
+          normalizeViewportForTerminalInteractionRef={normalizeViewportForTerminalInteractionRef}
+        />
+      ),
       imageNode: ImageNodeType,
       roleNode: ({ data, id }: WorkspaceCanvasNodeTypeProps) => (
         <WorkspaceCanvasRoleNodeType
@@ -281,6 +297,21 @@ export function useWorkspaceCanvasNodeTypes({
       ),
       taskNode: TaskNodeType,
     }
+    return Object.fromEntries(
+      Object.entries(nodeTypes).map(([type, NodeComponent]) => [
+        type,
+        (props: WorkspaceCanvasNodeTypeProps) => (
+          <WindowCollapsePresentation
+            id={props.id}
+            data={props.data}
+            onToggleSelection={() => selectNode(props.id, { toggle: true })}
+            onSelect={() => selectNode(props.id)}
+          >
+            <NodeComponent {...props} />
+          </WindowCollapsePresentation>
+        ),
+      ]),
+    )
   }, [
     clearNodeSelectionRef,
     closeNodeRef,

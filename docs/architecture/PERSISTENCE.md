@@ -228,10 +228,14 @@ Flush 失败时必须记录并返回 degraded，不能静默当作 durable shutd
 
 ## Write Ownership
 
-Sidebar project and Space-group disclosure preferences live in settings as
-`sidebarCollapsedWorkspaceIds` and `sidebarCollapsedSpaceGroupIds`. The latter uses
-the sidebar's workspace-scoped group identity (`workspaceId:groupId`). Only `true`
-entries are retained; missing or invalid legacy values default to expanded. Sidebar
+Sidebar root-canvas and Space-group disclosure preferences live in settings as
+`sidebarCollapsedSpaceGroupIds`, using the workspace-scoped group identity
+(`workspaceId:groupId`; the root-canvas group ID is `project-root`). The single-project
+navigation opens from the project icon rail and has no project disclosure control.
+`sidebarCollapsedWorkspaceIds` is retained for legacy data compatibility but does not
+hide the active project's navigation. Only `true` entries are retained; missing or
+invalid legacy values default to expanded. Explicit expansion removes that group's
+collapsed entry without changing other projects or legacy project records. Sidebar
 mounting, project switching, and temporary tree absence must not reset these records.
 The existing app-state hydration, write scheduling, and quit flush own their durability;
 the Sidebar does not maintain a second local persistence store.

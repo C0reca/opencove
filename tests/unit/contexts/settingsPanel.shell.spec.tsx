@@ -1,6 +1,6 @@
 import { EndpointOverviewProvider } from '../../../src/app/renderer/shell/components/EndpointOverviewProvider'
 import React from 'react'
-import { fireEvent, render as renderUi, screen, within } from '@testing-library/react'
+import { fireEvent, render as renderUi, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as terminalProfilesHook from '../../../src/app/renderer/shell/hooks/useTerminalProfiles'
 import {
@@ -75,12 +75,17 @@ describe('SettingsPanel shell', () => {
     vi.restoreAllMocks()
   })
 
-  it('exposes modal dialog semantics and a meaningfully named close button', () => {
+  it('exposes a named settings region and a meaningfully named close button', async () => {
     renderSettingsPanel()
 
-    const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(within(dialog).getByRole('button', { name: /close/i })).toBeVisible()
+    const panel = screen.getByTestId('settings-panel')
+    expect(panel).toBe(screen.getByRole('region', { name: 'Settings', exact: true }))
+    expect(panel).not.toHaveAttribute('aria-modal')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(within(panel).getByTestId('settings-panel-close')).toHaveAccessibleName(/close/i)
+    await waitFor(() => {
+      expect(within(panel).getByRole('searchbox', { name: 'Search settings' })).toHaveFocus()
+    })
   })
 
   it('updates the page heading when primary navigation changes pages', () => {
@@ -88,22 +93,35 @@ describe('SettingsPanel shell', () => {
 
     fireEvent.click(screen.getByTestId('settings-section-nav-appearance'))
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Display & Fonts' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Appearance' })).toBeVisible()
   })
 
-  it('groups primary navigation and omits secondary aliases from the sidebar', () => {
+  it('includes plugin management alongside the primary pages and Advanced', () => {
     renderSettingsPanel()
-
-    const sidebar = screen.getByLabelText('Settings sections')
-    for (const groupName of ['Application', 'Workspace', 'Connections', 'Advanced']) {
-      expect(within(sidebar).getByRole('group', { name: groupName })).toBeVisible()
+    const sidebar = screen.getByRole('complementary', { name: 'Settings sections' })
+    for (const page of [
+      'general',
+      'appearance',
+      'canvas',
+      'agent',
+      'plugins',
+      'terminal',
+      'shortcuts',
+      'worker',
+      'experimental',
+    ]) {
+      expect(within(sidebar).getByTestId(`settings-section-nav-${page}`)).toBeVisible()
     }
-
-    expect(within(sidebar).queryByTestId('settings-section-nav-shortcuts')).not.toBeInTheDocument()
-    expect(within(sidebar).queryByTestId('settings-section-nav-quick-menu')).not.toBeInTheDocument()
-    expect(
-      within(sidebar).queryByTestId('settings-section-nav-diagnostics'),
-    ).not.toBeInTheDocument()
+    expect(sidebar.querySelectorAll('[data-testid^="settings-section-nav-"]')).toHaveLength(9)
+    for (const alias of [
+      'notifications',
+      'integrations',
+      'task-configuration',
+      'quick-menu',
+      'diagnostics',
+    ]) {
+      expect(within(sidebar).queryByTestId(`settings-section-nav-${alias}`)).not.toBeInTheDocument()
+    }
   })
 
   it('selects the theme search result with ArrowDown and Enter', () => {
@@ -116,10 +134,12 @@ describe('SettingsPanel shell', () => {
     fireEvent.keyDown(search, { key: 'ArrowDown', code: 'ArrowDown' })
     fireEvent.keyDown(search, { key: 'Enter', code: 'Enter' })
 
-    expect(screen.getByRole('heading', { level: 2, name: 'Display & Fonts' })).toBeVisible()
+    expect(screen.getByRole('heading', { level: 2, name: 'Appearance' })).toBeVisible()
     const appearanceSection = document.getElementById('settings-section-appearance')
     expect(appearanceSection).not.toBeNull()
-    expect(within(appearanceSection as HTMLElement).getByText('Appearance')).toBeVisible()
+    expect(
+      within(appearanceSection as HTMLElement).getByTestId('settings-ui-theme'),
+    ).toHaveAccessibleName('Appearance')
   })
 
   it('clears a non-empty search with Escape without closing settings', () => {
@@ -149,21 +169,36 @@ describe('SettingsPanel shell', () => {
   it('gives notification toggles accessible names', () => {
     renderSettingsPanel()
 
-    fireEvent.click(screen.getByTestId('settings-section-nav-notifications'))
+    fireEvent.click(screen.getByTestId('settings-section-nav-general'))
+    expect(document.getElementById('settings-section-notifications')).not.toBeNull()
 
     for (const checkbox of screen.getAllByRole('checkbox')) {
       expect(checkbox).toHaveAccessibleName()
     }
   })
 
-  it('keeps project settings in a collapsible navigation group', () => {
+  it('switches project scope independently from application pages', () => {
     renderSettingsPanel({ workspaces: [createWorkspace()] })
-
-    expect(screen.getByText('Cove App')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse projects' }))
-
-    expect(screen.queryByText('Cove App')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Expand projects' })).toBeVisible()
+    expect(screen.getByTestId('settings-panel-scope-selector-trigger')).toHaveAccessibleName(
+      'Settings scope',
+    )
+    fireEvent.click(screen.getByTestId('settings-panel-scope-selector-trigger'))
+    fireEvent.click(screen.getByRole('option', { name: 'Cove App', exact: true }))
+    expect(screen.getByTestId('settings-panel-scope-selector')).toHaveValue('workspace:workspace-1')
+    expect(screen.getByRole('heading', { level: 2, name: 'Cove App' })).toBeVisible()
+    expect(screen.getByTestId('settings-worktree-root')).toBeVisible()
+    expect(screen.queryByTestId('settings-section-nav-agent')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('settings-panel-scope-selector-trigger'))
+    const app = document.querySelector<HTMLElement>('[data-cove-select-option-value="app"]')
+    expect(app).not.toBeNull()
+    fireEvent.click(app!)
+    expect(screen.getByTestId('settings-panel-scope-selector')).toHaveValue('app')
+    expect(screen.getByTestId('settings-section-nav-agent')).toBeVisible()
+    fireEvent.click(screen.getByTestId('settings-panel-page-selector-trigger'))
+    const pages = within(screen.getByTestId('settings-panel-page-selector-menu'))
+    expect(pages.getAllByRole('option')).toHaveLength(9)
+    expect(pages.getByRole('option', { name: 'Plugins', exact: true })).toBeVisible()
+    expect(pages.queryByRole('option', { name: 'Cove App' })).not.toBeInTheDocument()
   })
 })
 

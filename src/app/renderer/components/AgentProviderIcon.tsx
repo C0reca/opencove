@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { AGENT_PROVIDER_LABEL, type AgentProvider } from '@contexts/settings/domain/agentSettings'
 import type { LabelColor } from '@shared/types/labelColor'
+import kimiLogo from '../assets/agent-providers/kimi.png'
 
 interface AgentProviderIconProps {
   provider: AgentProvider
@@ -18,6 +19,8 @@ export function AgentProviderIcon({
   return (
     <span
       className={className ? `agent-provider-icon ${className}` : 'agent-provider-icon'}
+      data-cove-part="icon"
+      data-cove-kind="agent"
       data-agent-provider={provider}
       data-cove-label-color={labelColor ?? undefined}
       aria-label={accessibleLabel}
@@ -30,29 +33,31 @@ export function AgentProviderIcon({
 
 function ProviderGlyph({ provider }: { provider: AgentProvider }): JSX.Element {
   switch (provider) {
+    case 'kimi':
+      // Original asset: https://github.com/MoonshotAI/kimi-cli/blob/main/web/public/logo.png
+      return (
+        <img
+          className="agent-provider-icon__image"
+          src={kimiLogo}
+          width={16}
+          height={16}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+        />
+      )
     case 'claude-code':
+      // Claude's brand mark, from Simple Icons (CC0): https://simpleicons.org/?q=claude
       return (
         <svg
           className="agent-provider-icon__svg"
           aria-hidden="true"
+          focusable="false"
           viewBox="0 0 24 24"
-          fill="none"
+          fill="currentColor"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <g stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-            <line x1="12" y1="12" x2="12" y2="4.7" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(30 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(60 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(90 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(120 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(150 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(180 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(210 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(240 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(270 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(300 12 12)" />
-            <line x1="12" y1="12" x2="12" y2="4.7" transform="rotate(330 12 12)" />
-          </g>
+          <path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z" />
         </svg>
       )
     case 'opencode':
@@ -60,6 +65,7 @@ function ProviderGlyph({ provider }: { provider: AgentProvider }): JSX.Element {
         <svg
           className="agent-provider-icon__svg"
           aria-hidden="true"
+          focusable="false"
           viewBox="0 0 24 30"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -72,6 +78,7 @@ function ProviderGlyph({ provider }: { provider: AgentProvider }): JSX.Element {
         <svg
           className="agent-provider-icon__svg"
           aria-hidden="true"
+          focusable="false"
           viewBox="0 0 50 50"
           fill="currentColor"
           xmlns="http://www.w3.org/2000/svg"
@@ -79,12 +86,30 @@ function ProviderGlyph({ provider }: { provider: AgentProvider }): JSX.Element {
           <path d="M49.04 24.001L47.958 23.958H47.957C36.134 23.492 26.508 13.866 26.042 2.043L25.999 0.96C25.978 0.424 25.537 0 25 0S24.022 0.424 24.001 0.96L23.958 2.043C23.492 13.866 13.866 23.492 2.042 23.958L0.96 24.001C0.424 24.022 0 24.463 0 25C0 25.537 0.424 25.978 0.961 25.999L2.043 26.041C13.866 26.508 23.492 36.134 23.958 47.957L24.001 49.04C24.022 49.576 24.463 50 25 50S25.978 49.576 25.999 49.04L26.042 47.957C26.508 36.134 36.134 26.508 47.957 26.041L49.039 25.999C49.576 25.978 50 25.537 50 25C50 24.463 49.576 24.022 49.04 24.001Z" />
         </svg>
       )
-    case 'codex':
-    default:
+    case 'pi':
+      // Official mark: https://pi.dev/logo-auto.svg. Crop only the surrounding whitespace.
       return (
         <svg
           className="agent-provider-icon__svg"
           aria-hidden="true"
+          focusable="false"
+          viewBox="165.29 165.29 469.43 469.43"
+          fill="currentColor"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            fillRule="evenodd"
+            d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+          />
+          <path d="M517.36 400H634.72V634.72H517.36Z" />
+        </svg>
+      )
+    case 'codex':
+      return (
+        <svg
+          className="agent-provider-icon__svg"
+          aria-hidden="true"
+          focusable="false"
           viewBox="0 0 22 22"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -94,6 +119,12 @@ function ProviderGlyph({ provider }: { provider: AgentProvider }): JSX.Element {
             fill="currentColor"
           />
         </svg>
+      )
+    default:
+      return (
+        <span className="agent-provider-icon__monogram" aria-hidden="true">
+          ?
+        </span>
       )
   }
 }

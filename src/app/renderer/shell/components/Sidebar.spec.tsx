@@ -32,7 +32,8 @@ vi.mock('@dnd-kit/core', () => ({
   },
   DragOverlay: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   MeasuringStrategy: { Always: 0 },
-  PointerSensor: vi.fn(),
+  MouseSensor: vi.fn(),
+  TouchSensor: vi.fn(),
   closestCenter: vi.fn(),
   pointerWithin: vi.fn(() => []),
   useSensor: vi.fn((_sensor: unknown, options?: unknown) => ({ options })),
@@ -209,7 +210,7 @@ describe('Sidebar', () => {
       dndState.onDragStart?.({ active: { id: 'workspace-b' } })
     })
 
-    const overlayElement = container.querySelector('.workspace-item--drag-overlay')
+    const overlayElement = container.querySelector('.workspace-project-rail__drag-overlay')
     expect(overlayElement).not.toBeNull()
     expect(overlayElement?.textContent).toContain('workspace-b')
 
@@ -228,7 +229,7 @@ describe('Sidebar', () => {
     })
 
     expect(onReorderWorkspaces).toHaveBeenCalledWith('workspace-b', 'workspace-a')
-    expect(container.querySelector('.workspace-item--drag-overlay')).toBeNull()
+    expect(container.querySelector('.workspace-project-rail__drag-overlay')).toBeNull()
   })
 
   it('keeps workspace clicks, context menus, and nested agent clicks working', () => {
@@ -305,10 +306,10 @@ describe('Sidebar', () => {
 
     const agentButton = screen.getByTestId('workspace-agent-item-workspace-a-workspace-a-agent')
     const badge = agentButton.querySelector('.agent-provider-icon')
-    const group = container.querySelector('.workspace-space-group')
+    const group = container.querySelector('.workspace-space-group--space')
 
     expect(group?.getAttribute('data-cove-label-color')).toBe('blue')
-    expect(group?.className).toContain('workspace-space-group--branched')
+    expect(group?.querySelector('.workspace-space-group__branch')).not.toBeNull()
     expect(badge?.getAttribute('data-cove-label-color')).toBeNull()
     expect(agentButton.getAttribute('data-cove-label-color')).toBeNull()
   })
@@ -350,7 +351,7 @@ describe('Sidebar', () => {
     })
   })
 
-  it('toggles the project agent tree without selecting the workspace', () => {
+  it('shows only projects in the rail while preserving project button identity', () => {
     const onSelectWorkspace = vi.fn()
 
     const { rerender } = render(
@@ -366,11 +367,9 @@ describe('Sidebar', () => {
       />,
     )
 
-    const toggleButton = screen.getByTestId('workspace-item-toggle-workspace-a')
+    const projectButton = screen.getByTestId('workspace-item-workspace-a')
     expect(screen.getByTestId('workspace-agent-item-workspace-a-workspace-a-agent')).not.toBeNull()
 
-    fireEvent.click(toggleButton)
-    expect(screen.queryByTestId('workspace-agent-item-workspace-a-workspace-a-agent')).toBeNull()
     expect(onSelectWorkspace).not.toHaveBeenCalled()
     rerender(
       <Sidebar
@@ -385,6 +384,9 @@ describe('Sidebar', () => {
         onReorderWorkspaces={() => undefined}
       />,
     )
+    expect(screen.getByTestId('workspace-item-workspace-a')).toBe(projectButton)
+    expect(screen.queryByTestId('workspace-sidebar-navigation')).toBeNull()
+    expect(screen.queryByTestId('workspace-agent-item-workspace-a-workspace-a-agent')).toBeNull()
     expect(screen.queryByTestId('workspace-space-root-workspace-a')).toBeNull()
   })
 
@@ -426,7 +428,9 @@ describe('Sidebar', () => {
     )
 
     const spaceItem = screen.getByTestId('workspace-space-item-workspace-a-workspace-a-space')
-    const spaceToggle = spaceItem.querySelector('.workspace-space-item__toggle')
+    const spaceToggle = spaceItem
+      .closest('.workspace-space-item')
+      ?.querySelector('.workspace-space-item__toggle')
 
     expect(spaceToggle).not.toBeNull()
     expect(screen.getByTestId('workspace-agent-item-workspace-a-workspace-a-agent')).not.toBeNull()
@@ -448,11 +452,11 @@ describe('Sidebar', () => {
         onReorderWorkspaces={() => undefined}
       />,
     )
-    expect(screen.getByTestId('workspace-space-item-workspace-a-workspace-a-space')).not.toBeNull()
+    expect(screen.queryByTestId('workspace-space-item-workspace-a-workspace-a-space')).toBeNull()
     expect(screen.queryByTestId('workspace-agent-item-workspace-a-workspace-a-agent')).toBeNull()
   })
 
-  it('renders the collapsed rail with space grouping and nested agents', () => {
+  it('renders every project in the collapsed rail without spaces or agents', () => {
     const { container } = render(
       <Sidebar
         variant="rail"
@@ -477,24 +481,12 @@ describe('Sidebar', () => {
       />,
     )
 
-    const spaceButton = screen.getByTestId('workspace-space-item-workspace-a-workspace-a-space')
-    const agentButton = screen.getByTestId('workspace-agent-item-workspace-a-workspace-a-agent')
-    const inactiveSpaceButton = screen.getByTestId(
-      'workspace-space-item-workspace-b-workspace-b-space',
-    )
-    const inactiveAgentButton = screen.getByTestId(
-      'workspace-agent-item-workspace-b-workspace-b-agent',
-    )
-    const branch = container.querySelector('.workspace-space-group__branch')
-
     expect(container.querySelector('.workspace-sidebar__list')).not.toBeNull()
-    expect(spaceButton.className).toContain('workspace-space-item--active')
-    expect(inactiveSpaceButton.className).not.toContain('workspace-space-item--active')
-    expect(agentButton.querySelector('.agent-provider-icon')).not.toBeNull()
-    expect(inactiveAgentButton.querySelector('.agent-provider-icon')).not.toBeNull()
-    expect(branch).not.toBeNull()
-    expect(branch?.closest('.workspace-space-group')?.getAttribute('data-cove-label-color')).toBe(
-      'purple',
+    expect(screen.getByTestId('workspace-item-workspace-a').getAttribute('aria-current')).toBe(
+      'page',
     )
+    expect(screen.getByTestId('workspace-item-workspace-b').getAttribute('aria-current')).toBeNull()
+    expect(container.querySelector('.workspace-space-group')).toBeNull()
+    expect(container.querySelector('.workspace-agent-item')).toBeNull()
   })
 })

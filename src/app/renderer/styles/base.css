@@ -5,7 +5,31 @@
 }
 
 :root {
-  --cove-ui-font-scale: 1;
+  --cove-user-font-scale: 1;
+  --cove-theme-font-scale: 1;
+  --cove-ui-font-scale: calc(var(--cove-user-font-scale) * var(--cove-theme-font-scale));
+  --cove-font-ui: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --cove-node-title-font-size: 12px;
+  --cove-node-header-height: 34px;
+  --cove-node-header-padding-inline: 9px;
+  --cove-node-icon-size: 16px;
+  --cove-compact-icon-size: 25px;
+  --cove-compact-working-duration: 2.4s;
+  --cove-compact-working-delay: -85ms;
+  --cove-compact-output-duration: 1.05s;
+  --cove-compact-output-delay: -32ms;
+  --cove-explorer-radius: 8px;
+  /* Optional skin overrides use the guaranteed-invalid initial value so each
+     component keeps its own state/color-aware fallback until a theme supplies one. */
+  --cove-node-shadow-hover: initial;
+  --cove-node-shadow-focus: initial;
+  --cove-space-surface: initial;
+  --cove-space-border: initial;
+  --cove-space-shadow: initial;
+  --cove-space-caption-surface: initial;
+  --cove-control-gap: 6px;
+  --cove-menu-row-height: 30px;
+  --cove-sidebar-row-height: 30px;
   --cove-app-header-height: 36px;
   --cove-accent: #5e9cff;
   --cove-label-gray: #8e8e93;
@@ -38,6 +62,9 @@
      instead of rebuilding theme colors and geometry locally. */
   --cove-popover: var(--cove-window-surface);
   --cove-popover-border: var(--cove-border);
+  --cove-menu-surface: color-mix(in srgb, var(--cove-window-surface) 94%, transparent);
+  --cove-menu-border: color-mix(in srgb, var(--cove-border) 76%, var(--cove-accent) 24%);
+  --cove-menu-highlight: color-mix(in srgb, var(--cove-accent) 10%, transparent);
   --cove-control: var(--cove-field);
   --cove-control-hover: var(--cove-surface-hover);
   --cove-control-active: color-mix(in srgb, var(--cove-accent) 10%, transparent);
@@ -75,6 +102,20 @@
   --cove-theme-preview-dark: #15171b;
   --cove-theme-preview-ember: #c97c3a;
   --cove-theme-preview-ember-light: #f3e6d6;
+  --cove-theme-preview-pixel: linear-gradient(135deg, #5b9cf0, #55bddc 50%, #70ddbc);
+  --cove-theme-preview-pixel-light: linear-gradient(
+    135deg,
+    #e7f0f6 48%,
+    #3c79bb 49%,
+    #26859b 74%,
+    #308b6f
+  );
+  /* Shared effect palette; named themes can remap these three color stops. */
+  --cove-pixel-blue: #5b9cf0;
+  --cove-pixel-cyan: #55bddc;
+  --cove-pixel-mint: #70ddbc;
+  --cove-pixel-grid-gap: 17px;
+  --cove-pixel-grid-opacity: 0.64;
 
   --cove-radius-xs: 6px;
   --cove-radius-sm: 8px;
@@ -132,6 +173,10 @@
 
   --cove-node-border: rgba(107, 138, 236, 0.65);
   --cove-node-surface: rgba(10, 17, 33, 0.94);
+  --cove-node-background-image: none;
+  --cove-node-label-header-tint: 17%;
+  --cove-node-label-border-tint: 30%;
+  --cove-node-radius: var(--cove-radius-lg);
   --cove-node-header-surface: rgba(23, 36, 66, 0.96);
   --cove-node-header-border: rgba(104, 137, 226, 0.45);
   --cove-node-shadow-color: rgba(0, 0, 0, 0.45);
@@ -196,6 +241,12 @@
     transparent
   );
   --cove-settings-row-divider: color-mix(in srgb, var(--cove-border-subtle) 82%, transparent);
+  --cove-settings-heading-foreground: color-mix(
+    in srgb,
+    var(--cove-text) 65%,
+    var(--cove-accent-text)
+  );
+  --cove-settings-section-foreground: var(--cove-accent-text);
   --cove-settings-group-surface: color-mix(in srgb, var(--cove-field) 48%, transparent);
   --cove-settings-group-outline: color-mix(in srgb, var(--cove-border-subtle) 52%, transparent);
   --cove-settings-active-surface: color-mix(in srgb, var(--cove-accent) 13%, transparent);
@@ -209,6 +260,10 @@
 }
 
 :root[data-cove-theme='light'] {
+  --cove-pixel-blue: #2c64a1;
+  --cove-pixel-cyan: #247f8f;
+  --cove-pixel-mint: #24795f;
+  --cove-pixel-grid-opacity: 0.42;
   --cove-app-background: radial-gradient(circle at 18% 12%, #f8fafc 0%, #f2f5f9 52%, #eceff4 100%);
   --cove-app-background-elevated: #f7f9fc;
   --cove-surface: rgba(255, 255, 255, 0.78);
@@ -367,13 +422,7 @@ body,
 }
 
 body {
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--cove-font-ui);
   font-size: calc(16px * var(--cove-ui-font-scale));
   background: var(--cove-app-background);
   color: var(--cove-text);

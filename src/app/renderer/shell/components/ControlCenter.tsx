@@ -1,11 +1,26 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { Bell, ChevronRight, Map as MapIcon, Settings } from 'lucide-react'
+import {
+  Bell,
+  Check,
+  ChevronRight,
+  Map as MapIcon,
+  Settings,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react'
 import { Button } from '@app/renderer/components/ui/Button'
+import { Dialog } from '@app/renderer/components/ui/Dialog'
+import { IconButton } from '@app/renderer/components/ui/IconButton'
 import { Popover } from '@app/renderer/components/ui/Popover'
 import { Toggle } from '@app/renderer/components/ui/Toggle'
+import { useCompactViewport } from '@app/renderer/components/useCompactViewport'
 import { useTranslation } from '@app/renderer/i18n'
 import { getUiThemeLabel } from '@app/renderer/i18n/labels'
 import { UI_THEMES, type UiTheme } from '@contexts/settings/domain/agentSettings'
+import { UI_THEME_DESCRIPTORS, type UiThemeBaseScheme } from '@contexts/settings/domain/uiSettings'
+import { availablePluginThemes } from '@contexts/plugins/domain/pluginThemes'
+import { usePluginRegistry } from '@contexts/plugins/presentation/renderer/usePluginRegistry'
+import { useThemeApplicationStatus } from '@contexts/plugins/presentation/renderer/themeApplication'
 
 export function ControlCenter({
   isOpen,
@@ -33,6 +48,42 @@ export function ControlCenter({
   onOpenSettings: () => void
 }): React.JSX.Element | null {
   const { t } = useTranslation()
+  const { plugins } = usePluginRegistry()
+  const applied = useThemeApplicationStatus()
+  const pluginThemes = availablePluginThemes(plugins)
+  const themeChoices: Array<{
+    id: UiTheme
+    title: string
+    appearance: UiThemeBaseScheme
+    preview: string
+    pluginName?: string
+    style?: React.CSSProperties
+  }> = [
+    ...UI_THEMES.map(id => ({
+      id,
+      title: getUiThemeLabel(t, id),
+      appearance: UI_THEME_DESCRIPTORS[id].baseScheme,
+      preview: id,
+    })),
+    ...pluginThemes.map(({ id, plugin, theme }) => ({
+      id,
+      title: theme.title,
+      appearance: theme.appearance,
+      preview: theme.extends ?? theme.appearance,
+      pluginName: plugin.displayName,
+      style:
+        theme.tokens['--cove-app-background'] || theme.tokens['--cove-accent']
+          ? ({
+              '--cove-control-theme-surface': theme.tokens['--cove-app-background'],
+              '--cove-control-theme-accent': theme.tokens['--cove-accent'],
+            } as React.CSSProperties)
+          : undefined,
+    })),
+  ]
+  const selectedChoice = themeChoices.find(choice => choice.id === uiTheme)
+  const isUnavailable = uiTheme.startsWith('plugin:') && !selectedChoice
+  const hasLoadError = applied.requestedId === uiTheme && Boolean(applied.error)
+  const isCompact = useCompactViewport()
   const titleId = useId()
   const initialFocusRef = useRef<HTMLInputElement | null>(null)
   const [returnFocusOnClose, setReturnFocusOnClose] = useState(true)
@@ -43,6 +94,9 @@ export function ControlCenter({
     }
 
     setReturnFocusOnClose(true)
+    if (isCompact) {
+      return
+    }
     const focusTimer = window.setTimeout(() => {
       initialFocusRef.current?.focus({ preventScroll: true })
     }, 0)
@@ -50,29 +104,23 @@ export function ControlCenter({
     return () => {
       window.clearTimeout(focusTimer)
     }
-  }, [isOpen])
+  }, [isCompact, isOpen])
 
-  return (
-    <Popover
-      open={isOpen}
-      anchorRef={anchorRef}
-      returnFocus={returnFocusOnClose ? anchorRef : false}
-      side="bottom"
-      align="end"
-      offset={8}
-      className="control-center"
-      role="dialog"
-      aria-labelledby={titleId}
-      data-testid="control-center"
-      onDismiss={() => {
-        onClose()
-      }}
-    >
+  const content = (
+    <>
       <header className="control-center__header">
+        <SlidersHorizontal size={16} aria-hidden="true" />
         <h2 id={titleId} className="control-center__title">
           {t('controlCenter.title')}
         </h2>
-        <span className="control-center__header-meta">{t('controlCenter.quickSettings')}</span>
+        <IconButton
+          className="control-center__close"
+          label={t('common.close')}
+          data-testid="control-center-close"
+          onClick={onClose}
+        >
+          <X size={16} aria-hidden="true" />
+        </IconButton>
       </header>
 
       <div className="control-center__toggles">
@@ -80,14 +128,9 @@ export function ControlCenter({
           <span className="control-center__row-icon" aria-hidden="true">
             <MapIcon />
           </span>
-          <span className="control-center__row-copy">
-            <span className="control-center__row-label">{t('controlCenter.minimap')}</span>
-            <span className="control-center__row-status">
-              {isMinimapVisible ? t('controlCenter.shown') : t('controlCenter.hidden')}
-            </span>
-          </span>
+          <span className="control-center__row-label">{t('controlCenter.minimap')}</span>
           <Toggle
-            ref={initialFocusRef}
+            ref={hasActiveWorkspace ? initialFocusRef : undefined}
             checked={isMinimapVisible}
             disabled={!hasActiveWorkspace}
             label={t('controlCenter.minimap')}
@@ -102,15 +145,9 @@ export function ControlCenter({
           <span className="control-center__row-icon" aria-hidden="true">
             <Bell />
           </span>
-          <span className="control-center__row-copy">
-            <span className="control-center__row-label">
-              {t('controlCenter.agentStandbyBanner')}
-            </span>
-            <span className="control-center__row-status">
-              {isStandbyBannerEnabled ? t('controlCenter.on') : t('controlCenter.off')}
-            </span>
-          </span>
+          <span className="control-center__row-label">{t('controlCenter.agentStandbyBanner')}</span>
           <Toggle
+            ref={hasActiveWorkspace ? undefined : initialFocusRef}
             checked={isStandbyBannerEnabled}
             label={t('controlCenter.agentStandbyBanner')}
             testId="control-center-toggle-agent-standby-banner"
@@ -130,33 +167,62 @@ export function ControlCenter({
             className="control-center__current-theme"
             data-testid="control-center-current-theme"
           >
-            {getUiThemeLabel(t, uiTheme)}
+            {hasLoadError
+              ? getUiThemeLabel(t, 'pixel')
+              : (selectedChoice?.title ?? getUiThemeLabel(t, 'pixel'))}
           </span>
         </div>
-        <div className="control-center__themes" role="radiogroup">
-          {UI_THEMES.map(theme => (
-            <label key={theme} className="control-center__theme">
+        <div
+          className="control-center__themes"
+          role="radiogroup"
+          aria-labelledby={`${titleId}-theme`}
+        >
+          {themeChoices.map(theme => (
+            <label
+              key={theme.id}
+              className="control-center__theme"
+              data-theme-choice={theme.id}
+              data-plugin-theme={theme.pluginName ? '' : undefined}
+            >
               <input
                 type="radio"
-                name="control-center-theme"
-                value={theme}
-                checked={uiTheme === theme}
-                data-testid={`control-center-theme-${theme}`}
+                name={`${titleId}-theme`}
+                value={theme.id}
+                checked={uiTheme === theme.id}
+                data-testid={`control-center-theme-${theme.id}`}
                 onChange={() => {
-                  onChangeUiTheme(theme)
+                  onChangeUiTheme(theme.id)
                 }}
               />
-              <span className="control-center__theme-card">
+              <span className="control-center__theme-option">
                 <span
                   className="control-center__theme-preview"
-                  data-theme-preview={theme}
+                  data-theme-preview={theme.preview}
+                  data-theme-scheme={theme.appearance}
+                  style={theme.style}
+                  data-theme-colors={theme.style ? '' : undefined}
                   aria-hidden="true"
                 />
-                <span className="control-center__theme-label">{getUiThemeLabel(t, theme)}</span>
+                <span className="control-center__theme-label">
+                  {theme.title}
+                  {theme.pluginName ? (
+                    <span className="control-center__theme-source">{theme.pluginName}</span>
+                  ) : null}
+                </span>
+                <Check size={14} className="control-center__theme-check" aria-hidden="true" />
               </span>
             </label>
           ))}
         </div>
+        {isUnavailable || hasLoadError ? (
+          <p className="control-center__theme-status" role="status">
+            {t(
+              hasLoadError
+                ? 'pluginHostExtensions.themeLoadFailed'
+                : 'pluginHostExtensions.unavailableTheme',
+            )}
+          </p>
+        ) : null}
       </section>
 
       <footer className="control-center__footer">
@@ -176,6 +242,39 @@ export function ControlCenter({
           <ChevronRight className="control-center__settings-chevron" aria-hidden="true" />
         </Button>
       </footer>
+    </>
+  )
+
+  const surfaceProps = {
+    open: isOpen,
+    returnFocus: returnFocusOnClose ? anchorRef : (false as const),
+    'aria-labelledby': titleId,
+    'data-testid': 'control-center',
+    onDismiss: onClose,
+  }
+
+  return isCompact ? (
+    <Dialog
+      {...surfaceProps}
+      className="control-center control-center--sheet"
+      backdropClassName="control-center-backdrop"
+      backdropTestId="control-center-backdrop"
+      initialFocusRef={initialFocusRef}
+      inertRootSelector=".app-shell"
+    >
+      {content}
+    </Dialog>
+  ) : (
+    <Popover
+      {...surfaceProps}
+      anchorRef={anchorRef}
+      side="bottom"
+      align="end"
+      offset={8}
+      className="control-center"
+      role="dialog"
+    >
+      {content}
     </Popover>
   )
 }

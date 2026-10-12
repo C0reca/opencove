@@ -1,6 +1,7 @@
 import { TerminalLinkHost, type TerminalLinkHostOptions } from './links/TerminalLinkHost'
 import React, { useId, type JSX } from 'react'
 import { useTranslation } from '@app/renderer/i18n'
+import type { AgentProvider } from '@contexts/settings/domain/agentSettings'
 import { Handle, Position } from '@xyflow/react'
 import type {
   AgentHookInstallState,
@@ -24,6 +25,7 @@ interface TerminalNodeFrameProps {
   title: string
   fixedTitlePrefix?: string | null
   kind: WorkspaceNodeKind
+  agentProvider?: AgentProvider | null
   labelColor?: LabelColor | null
   agentExecutionDirectory?: string | null
   agentResumeSessionId?: string | null
@@ -76,6 +78,7 @@ export function TerminalNodeFrame({
   title,
   fixedTitlePrefix,
   kind,
+  agentProvider,
   labelColor,
   agentExecutionDirectory,
   agentResumeSessionId,
@@ -129,6 +132,8 @@ export function TerminalNodeFrame({
 
   return (
     <div
+      data-cove-part="window"
+      data-cove-kind={kind}
       className={`terminal-node nowheel ${hasSelectedDragSurface ? 'terminal-node--selected-surface' : ''}`.trim()}
       data-agent-state-source={agentStateSource ?? undefined}
       data-agent-hook-install-state={agentHookInstallState ?? undefined}
@@ -200,6 +205,7 @@ export function TerminalNodeFrame({
         title={title}
         fixedTitlePrefix={fixedTitlePrefix}
         kind={kind}
+        agentProvider={agentProvider}
         status={status}
         agentStateDegraded={agentStateDegraded}
         labelColor={labelColor ?? null}
@@ -265,10 +271,12 @@ export function TerminalNodeFrame({
       ) : null}
 
       {geometryFeedback}
-      <div className="terminal-node__body">
+      <div className="terminal-node__body" data-cove-part="window-body">
         <div
           id={terminalElementId}
           ref={containerRef}
+          data-cove-part="window"
+          data-cove-kind={kind}
           className={`terminal-node__terminal nodrag ${isTerminalHydrated ? '' : 'terminal-node__terminal--hydrating'}`.trim()}
           data-cove-focus-scope="terminal"
           aria-busy={sessionId.trim().length > 0 && isTerminalHydrated ? 'false' : 'true'}

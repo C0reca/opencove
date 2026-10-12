@@ -37,11 +37,39 @@ function createWorkspace(overrides: Partial<WorkspaceState> = {}): WorkspaceStat
 }
 
 describe('settingsSearchIndex', () => {
+  it.each([
+    { dictionary: en, query: 'extensions' },
+    { dictionary: zhCN, query: '插件' },
+  ])('finds the plugin manager using $query', ({ dictionary, query }) => {
+    const entries = createSettingsSearchEntries({ t: createTranslator(dictionary), workspaces: [] })
+    expect(searchSettingsEntries(entries, query)[0]).toMatchObject({
+      pageId: 'plugins',
+      anchorId: 'settings-section-plugins',
+    })
+  })
+
+  it.each([
+    ['Node Creation Effect', en, 'settings-node-creation-pixel-effect'],
+    ['Node Closing Effect', en, 'settings-node-close-pixel-effect'],
+    ['Canvas Background Effect', en, 'settings-canvas-pixel-background'],
+    ['创建效果', zhCN, 'settings-node-creation-pixel-effect'],
+    ['关闭效果', zhCN, 'settings-node-close-pixel-effect'],
+    ['画布背景效果', zhCN, 'settings-canvas-pixel-background'],
+  ] as const)('finds the independent effect control %s', (query, dictionary, anchorId) => {
+    const entries = createSettingsSearchEntries({
+      t: createTranslator(dictionary),
+      workspaces: [],
+    })
+    expect(searchSettingsEntries(entries, query)[0]).toMatchObject({
+      pageId: 'appearance',
+      anchorId,
+    })
+  })
+
   it('finds a localized settings entry by Chinese label', () => {
     const entries = createSettingsSearchEntries({
       t: createTranslator(zhCN),
       workspaces: [],
-      endpointsEnabled: false,
     })
 
     const results = searchSettingsEntries(entries, '外观')
@@ -49,7 +77,7 @@ describe('settingsSearchIndex', () => {
     expect(results[0]).toMatchObject({
       id: 'general.theme',
       pageId: 'appearance',
-      pageLabel: '显示与字体',
+      pageLabel: '外观',
       anchorId: 'settings-ui-theme',
     })
   })
@@ -61,7 +89,6 @@ describe('settingsSearchIndex', () => {
     const entries = createSettingsSearchEntries({
       t: createTranslator(dictionary),
       workspaces: [],
-      endpointsEnabled: false,
     })
     expect(searchSettingsEntries(entries, query)[0]).toMatchObject({
       id: 'canvas.viewport-transition',
@@ -70,21 +97,40 @@ describe('settingsSearchIndex', () => {
     })
   })
 
-  it('filters endpoint entries when remote workers are disabled', () => {
+  it('always includes remote connections without obsolete mode or feature-toggle entries', () => {
     const entries = createSettingsSearchEntries({
       t: createTranslator(en),
       workspaces: [],
-      endpointsEnabled: false,
     })
 
-    expect(searchSettingsEntries(entries, 'endpoint')).toHaveLength(0)
+    expect(searchSettingsEntries(entries, 'endpoint')[0]).toMatchObject({
+      id: 'endpoints.list',
+      pageId: 'worker',
+      title: 'Remote Connections',
+    })
+    expect(entries.some(entry => entry.id === 'worker.home')).toBe(false)
+    expect(entries.some(entry => entry.id === 'experimental.remote-workers')).toBe(false)
+  })
+
+  it.each([
+    { dictionary: en, query: 'nearby free space' },
+    { dictionary: zhCN, query: '在附近空位展开' },
+  ])('finds the window expansion setting using $query', ({ dictionary, query }) => {
+    const entries = createSettingsSearchEntries({
+      t: createTranslator(dictionary),
+      workspaces: [],
+    })
+    expect(searchSettingsEntries(entries, query)[0]).toMatchObject({
+      id: 'canvas.node-expansion',
+      pageId: 'canvas-windows',
+      anchorId: 'settings-node-expand-behavior',
+    })
   })
 
   it('includes workspace settings and falls back to the folder name', () => {
     const entries = createSettingsSearchEntries({
       t: createTranslator(en),
       workspaces: [createWorkspace({ name: '', path: '/Users/example/My Project' })],
-      endpointsEnabled: false,
     })
 
     const results = searchSettingsEntries(entries, 'My Project')
@@ -101,7 +147,6 @@ describe('settingsSearchIndex', () => {
     const entries = createSettingsSearchEntries({
       t: createTranslator(en),
       workspaces: [],
-      endpointsEnabled: false,
     })
 
     const results = searchSettingsEntries(entries, 'memory diagnostics')
@@ -112,5 +157,40 @@ describe('settingsSearchIndex', () => {
       pageLabel: 'Advanced',
       anchorId: 'settings-section-diagnostics',
     })
+  })
+
+  it('routes every terminal control to its single editor', () => {
+    const entries = createSettingsSearchEntries({
+      t: createTranslator(en),
+      workspaces: [],
+    })
+    for (const id of [
+      'general.terminal-font-size',
+      'general.terminal-font-family',
+      'general.terminal-display-calibration',
+      'canvas.terminal-profile',
+    ]) {
+      expect(entries.find(entry => entry.id === id)?.pageId).toBe('terminal')
+    }
+  })
+
+  it('provides exact provider destinations while hiding unavailable feature gates', () => {
+    const entries = createSettingsSearchEntries({
+      t: createTranslator(en),
+      workspaces: [],
+    })
+    expect(entries.find(entry => entry.id === 'agent.codex.models')).toMatchObject({
+      pageId: 'agent',
+      provider: 'codex',
+      anchorId: 'settings-agent-models-codex',
+    })
+    expect(
+      searchSettingsEntries(entries, 'codex model').some(
+        entry => entry.id === 'agent.codex.models',
+      ),
+    ).toBe(true)
+    expect(entries.some(entry => entry.provider === 'gemini')).toBe(false)
+    expect(entries.some(entry => entry.id === 'tasks.title-generation')).toBe(false)
+    expect(entries.find(entry => entry.id === 'tasks.tags')?.pageId).toBe('task-configuration')
   })
 })

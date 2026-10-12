@@ -173,6 +173,7 @@ export interface OpenCoveApi {
     showReportFile: (payload: ShowIssueReportFileInput) => Promise<void>
   }
   controlSurface: {
+    resolvePluginResourceUrl: (resourcePath: string) => Promise<string>
     invoke: <TValue = unknown>(request: ControlSurfaceInvokeRequest) => Promise<TValue>
   }
   windowChrome: {
@@ -188,6 +189,7 @@ export interface OpenCoveApi {
   }
   filesystem: {
     getPathForFile: (file: File) => string
+    resolveDroppedFile?: (file: File) => Promise<FileSystemStat | null>
     createDirectory: (payload: CreateDirectoryInput) => Promise<void>
     copyEntry: (payload: CopyEntryInput) => Promise<void>
     moveEntry: (payload: MoveEntryInput) => Promise<void>

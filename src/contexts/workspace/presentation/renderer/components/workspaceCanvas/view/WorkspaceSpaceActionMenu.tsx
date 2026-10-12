@@ -1,18 +1,25 @@
+import { PluginContextCommands } from '@contexts/plugins/presentation/renderer/PluginContextCommands'
 import React from 'react'
 import { ViewportMenuSurface } from '@app/renderer/components/ViewportMenuSurface'
+import { useCompactViewport } from '@app/renderer/components/useCompactViewport'
+import { menuHoverHandler } from '@app/renderer/components/menuHoverHandler'
 import {
   Check,
   ChevronRight,
+  Code2,
   Copy,
   FolderOpen,
   GitBranchPlus,
   LayoutGrid,
   Package,
+  Terminal,
+  Undo2,
 } from 'lucide-react'
 import { useTranslation } from '@app/renderer/i18n'
 import type { WorkspacePathOpener, WorkspacePathOpenerId } from '@shared/contracts/dto'
 import { LABEL_COLORS, type LabelColor } from '@shared/types/labelColor'
 import type { SpaceActionMenuState } from '../types'
+import { useWorkspaceCollapse } from '../collapse/WorkspaceCollapseContext'
 import {
   MENU_WIDTH,
   SUBMENU_CLOSE_DELAY_MS,
@@ -94,6 +101,8 @@ export function WorkspaceSpaceActionMenu({
   onOpenPath,
 }: WorkspaceSpaceActionMenuProps): React.JSX.Element | null {
   const { t } = useTranslation()
+  const collapse = useWorkspaceCollapse()
+  const compact = useCompactViewport()
   const [openSubmenu, setOpenSubmenu] = React.useState<'open' | null>(null)
   const [pinnedSubmenu, setPinnedSubmenu] = React.useState<'open' | null>(null)
   const closeSubmenuTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -119,7 +128,7 @@ export function WorkspaceSpaceActionMenu({
 
   const scheduleSubmenuClose = React.useCallback(() => {
     cancelScheduledSubmenuClose()
-    if (pinnedSubmenu !== null) {
+    if (compact || pinnedSubmenu !== null) {
       return
     }
 
@@ -127,7 +136,7 @@ export function WorkspaceSpaceActionMenu({
       closeSubmenuTimeoutRef.current = null
       setOpenSubmenu(null)
     }, SUBMENU_CLOSE_DELAY_MS)
-  }, [cancelScheduledSubmenuClose, pinnedSubmenu])
+  }, [cancelScheduledSubmenuClose, compact, pinnedSubmenu])
 
   const openSubmenuTransient = React.useCallback(
     (submenu: 'open') => {
@@ -146,6 +155,12 @@ export function WorkspaceSpaceActionMenu({
     },
     [cancelScheduledSubmenuClose],
   )
+
+  const closeSubmenu = React.useCallback(() => {
+    cancelScheduledSubmenuClose()
+    setPinnedSubmenu(null)
+    setOpenSubmenu(null)
+  }, [cancelScheduledSubmenuClose])
 
   React.useEffect(() => {
     cancelScheduledSubmenuClose()
@@ -229,6 +244,9 @@ export function WorkspaceSpaceActionMenu({
     <>
       <ViewportMenuSurface
         open={true}
+        mobileTitle={t('spaceActions.title')}
+        onDismiss={closeMenu}
+        dismissOnEscape
         className="workspace-context-menu workspace-space-action-menu"
         data-testid="workspace-space-action-menu"
         placement={{
@@ -248,6 +266,7 @@ export function WorkspaceSpaceActionMenu({
             className={`workspace-space-action-menu__color-button${currentLabelColor === null ? ' workspace-space-action-menu__color-button--selected' : ''}`}
             data-testid="workspace-space-action-label-color-none"
             aria-label={t('labelColors.none')}
+            aria-pressed={currentLabelColor === null}
             title={t('labelColors.none')}
             onClick={() => {
               setSpaceLabelColor(menu.spaceId, null)
@@ -273,6 +292,7 @@ export function WorkspaceSpaceActionMenu({
                 className={`workspace-space-action-menu__color-button${selected ? ' workspace-space-action-menu__color-button--selected' : ''}`}
                 data-testid={`workspace-space-action-label-color-${color}`}
                 aria-label={t(`labelColors.${color}`)}
+                aria-pressed={selected}
                 title={t(`labelColors.${color}`)}
                 onClick={() => {
                   setSpaceLabelColor(menu.spaceId, color)
@@ -342,8 +362,9 @@ export function WorkspaceSpaceActionMenu({
             type="button"
             data-testid="workspace-space-action-open"
             ref={openButtonRef}
-            onMouseEnter={() => openSubmenuTransient('open')}
-            onFocus={() => openSubmenuTransient('open')}
+            aria-haspopup="menu"
+            aria-expanded={shouldShowOpenSubmenu}
+            onMouseEnter={menuHoverHandler(() => openSubmenuTransient('open'))}
             onClick={() => openSubmenuPinned('open')}
           >
             <FolderOpen className="workspace-context-menu__icon" aria-hidden="true" />
@@ -361,6 +382,7 @@ export function WorkspaceSpaceActionMenu({
           <button
             type="button"
             data-testid="workspace-space-action-preserve-window-sizes"
+            aria-pressed={preserveWindowSizes}
             onClick={() => {
               onChangePreserveWindowSizes(!preserveWindowSizes)
             }}
@@ -369,6 +391,20 @@ export function WorkspaceSpaceActionMenu({
             <span className="workspace-context-menu__label">
               {t('workspaceArrangeMenu.preserveWindowSizes')}
             </span>
+          </button>
+        ) : null}
+
+        {collapse.canUndoArrange(menu.spaceId) ? (
+          <button
+            type="button"
+            data-testid={`workspace-space-undo-arrange-${menu.spaceId}`}
+            onClick={() => {
+              collapse.undoArrange(menu.spaceId)
+              closeMenu()
+            }}
+          >
+            <Undo2 className="workspace-context-menu__icon" aria-hidden="true" />
+            <span className="workspace-context-menu__label">{t('spaceCollapse.undoArrange')}</span>
           </button>
         ) : null}
 
@@ -388,12 +424,17 @@ export function WorkspaceSpaceActionMenu({
             </span>
           </button>
         ) : null}
+        <PluginContextCommands surface="space" spaceId={menu.spaceId} onClose={closeMenu} />
       </ViewportMenuSurface>
 
       {shouldShowOpenSubmenu ? (
         <ViewportMenuSurface
           ref={submenuRef}
           open={true}
+          mobileTitle={t('spaceActions.open')}
+          isSubmenu
+          onBack={closeSubmenu}
+          onDismiss={closeMenu}
           className="workspace-context-menu workspace-space-action-menu workspace-space-action-menu--submenu"
           data-testid="workspace-space-action-open-menu"
           placement={{
@@ -402,11 +443,11 @@ export function WorkspaceSpaceActionMenu({
             left: submenuPlacement.left,
           }}
           style={submenuStyle}
-          onMouseEnter={() => {
+          onMouseEnter={menuHoverHandler(() => {
             cancelScheduledSubmenuClose()
             setPinnedSubmenu(null)
             setOpenSubmenu('open')
-          }}
+          })}
           onMouseLeave={scheduleSubmenuClose}
         >
           {sortedOpeners.map(opener => (
@@ -418,7 +459,13 @@ export function WorkspaceSpaceActionMenu({
                 void Promise.resolve(onOpenPath(opener.id)).finally(closeMenu)
               }}
             >
-              <FolderOpen className="workspace-context-menu__icon" aria-hidden="true" />
+              {opener.id === 'finder' ? (
+                <FolderOpen className="workspace-context-menu__icon" aria-hidden="true" />
+              ) : ['terminal', 'iterm', 'warp', 'ghostty'].includes(opener.id) ? (
+                <Terminal className="workspace-context-menu__icon" aria-hidden="true" />
+              ) : (
+                <Code2 className="workspace-context-menu__icon" aria-hidden="true" />
+              )}
               <span className="workspace-context-menu__label">{opener.label}</span>
             </button>
           ))}

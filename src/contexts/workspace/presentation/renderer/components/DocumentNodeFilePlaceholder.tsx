@@ -30,7 +30,7 @@ export function DocumentNodeFilePlaceholder({
   mountId,
 }: {
   uri: string
-  mountId: string | null
+  mountId: string | null | undefined
 }): JSX.Element {
   const { t } = useTranslation()
   const fileName = decodeUriPathname(uri).split('/').at(-1) || t('documentNode.title')

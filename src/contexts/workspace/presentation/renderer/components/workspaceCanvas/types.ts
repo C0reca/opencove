@@ -18,6 +18,7 @@ import type { MountDto, TerminalPtyGeometry, TerminalRuntimeKind } from '@shared
 import type { LabelColor } from '@shared/types/labelColor'
 import type { SpaceBoundary } from '@shared/types/spaceBoundary'
 import type { TerminalPtyGeometryDisplayMetrics } from '@contexts/workspace/domain/terminalPtyGeometry'
+import type { CanvasCollapseState } from '../../utils/canvasCollapse'
 
 export type WorkspaceCanvasMessageTone = 'info' | 'warning' | 'error'
 
@@ -51,6 +52,7 @@ export interface WorkspaceCanvasProps {
   onChangePreserveWindowSizesOnArrange: (enabled: boolean) => void
   isFocusNodeTargetZoomPreviewing?: boolean
   focusNodeId?: string | null
+  focusNodeInput?: boolean
   focusSpaceId?: string | null
   focusSequence?: number
 }
@@ -73,6 +75,9 @@ export interface SelectionContextMenuState {
   kind: 'selection'
   x: number
   y: number
+  nodeId?: string
+  /** Ephemeral runtime-owned close action for the compact window under the pointer. */
+  closeWindow?: () => void
 }
 
 export type ContextMenuState = PaneContextMenuState | SelectionContextMenuState
@@ -134,6 +139,8 @@ export interface SpaceVisual {
 }
 
 export interface SpaceDragState {
+  isCollapsed?: boolean
+  collapseState?: CanvasCollapseState
   pointerId: number
   spaceId: string
   startFlow: Point
@@ -143,6 +150,7 @@ export interface SpaceDragState {
   allNodePositions: Map<string, Point>
   initialNodePositions: Map<string, Point>
   ownedBounds: { left: number; top: number; right: number; bottom: number } | null
+  minimumSize?: { width: number; height: number }
   handle:
     | { kind: 'move' }
     | {

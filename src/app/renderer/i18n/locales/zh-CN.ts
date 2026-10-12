@@ -1,7 +1,11 @@
+import { zhCNTerminalLink } from './zh-CN.terminalLink'
 import type { TranslationDictionary } from './schema'
 
 import { zhCNCommonRemoteEndpoints } from './zh-CN.commonRemoteEndpoints'
 import { zhCNMessages } from './zh-CN.messages'
+import { zhCNSidebarView } from './zh-CN.sidebarView'
+import { zhCNCanvasCollapse } from './zh-CN.canvasCollapse'
+import { zhCNSpaceCollapse } from './zh-CN.spaceCollapse'
 import { zhCNShell } from './zh-CN.shell'
 import { zhCNSpaceExplorer } from './zh-CN.spaceExplorer'
 import { zhCNSettingsPanel } from './zh-CN.settingsPanel'
@@ -13,7 +17,23 @@ import { zhCNRole } from './zh-CN.role'
 import { zhCNWorkspaceCanvas } from './zh-CN.workspaceCanvas'
 
 export const zhCN = {
+  pluginHostExtensions: {
+    themeLoadFailed: '此主题未能加载，暂时显示 Pixel，原主题选择仍会保留。',
+    restoreTheme: '改用 Pixel',
+
+    emptySidebar: '暂无条目。',
+    invalidPreference: '请为此偏好设置输入有效值。',
+    staleCommand: '插件已变更，请重新打开菜单。',
+    preferences: '偏好设置',
+    commands: '插件命令',
+    completed: '已完成：{{title}}',
+    unavailableTheme: '此主题暂不可用。启用后将恢复，目前显示默认主题。',
+  },
+  ...zhCNCanvasCollapse,
+  ...zhCNSpaceCollapse,
   common: {
+    actions: '操作',
+    back: '返回',
     closeShortcutSelectWindow: '请选择要关闭的窗口。',
     closeShortcutFailed: '无法关闭选中的窗口，请重试。',
     quitShortcutHint: '在 1.5 秒内再次按下 {{shortcut}} 退出应用。',
@@ -61,6 +81,14 @@ export const zhCN = {
     done: '完成',
   },
   sidebar: {
+    ...zhCNSidebarView,
+    rootCanvas: '项目画布',
+    projectMore: '项目操作',
+    spaceMore: 'Space 操作',
+    agentMore: 'Agent 操作',
+    remoteProject: '远程项目',
+    agentsNeedInput_one: '{{count}} 个 Agent 待确认',
+    agentsNeedInput_other: '{{count}} 个 Agent 待确认',
     projects: '项目',
     addProject: '添加',
     pin: '固定侧边栏',
@@ -77,7 +105,7 @@ export const zhCN = {
     collapseProjectAgents: '折叠项目 Agent 列表',
     status: {
       working: '运行中',
-      waiting: '等待中',
+      waiting: '待确认',
       standby: '待命',
     },
     terminals_one: '{{count}} 个终端',
@@ -143,6 +171,7 @@ export const zhCN = {
       projects: '项目',
     },
     commands: {
+      searchWorkspace: '搜索当前项目',
       openSettings: '设置',
       openSettingsHint: '打开设置',
       spaceArchives: 'Space 归档记录',
@@ -278,6 +307,7 @@ export const zhCN = {
     moreActions: '任务操作',
     deleteTask: '删除任务',
     noTags: '没有标签',
+    editMeta: '编辑优先级和标签',
     requirement: '任务要求',
     agents: 'Agent 会话',
     noAgentSessionsYet: '还没有 Agent 会话记录。',
@@ -358,28 +388,7 @@ export const zhCN = {
     geometrySyncFailed: '终端尺寸未能确认，请重试以适配当前窗口。',
     retryGeometrySync: '重新适配',
   },
-  terminalLink: {
-    actions: '终端链接',
-    hint: '点击查看操作 · {{modifier}} 点击打开',
-    click: '点击',
-    openFile: '打开文件',
-    previewImage: '预览图片',
-    playAudio: '播放音频',
-    playVideo: '播放视频',
-    openBrowser: '在浏览器中打开',
-    openFinder: '在 Finder 中打开',
-    openFolder: '打开文件夹',
-    openExplorer: '在文件浏览器中打开',
-    openWithDefaultApp: '使用默认应用打开',
-    noDestination: '当前项目没有可浏览此来源的文件视图。',
-    copy: '复制',
-    resolving: '正在检查目标…',
-    confirmDirectory: '此路径基于终端启动目录，请确认目标后打开。',
-    notFound: '未找到目标。',
-    forbidden: '目标超出允许访问的文件范围。',
-    unavailable: '当前环境无法打开此目标。',
-    openFailed: '未能打开此目标，请重试。',
-  },
+  terminalLink: zhCNTerminalLink,
   terminalFind: {
     placeholder: '查找…',
     previous: '上一个匹配',

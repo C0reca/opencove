@@ -79,6 +79,7 @@ test.describe('Workspace Canvas - Terminal Links', () => {
         const actions = window.locator(actionsSelector)
         await expect(actions).toBeVisible()
         await expect(actions).toContainText(uri)
+        await expect(window.locator('.react-flow__nodesselection-rect')).toHaveCount(0)
         await expect(input).toBeFocused()
         await expect(actions.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0)
         const primary = actions.getByRole('button', { name: 'Open in browser', exact: true })

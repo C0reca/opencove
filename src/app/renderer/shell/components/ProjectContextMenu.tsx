@@ -23,14 +23,18 @@ import type { WorkspaceState } from '@contexts/workspace/presentation/renderer/t
 import type { ProjectContextMenuTarget } from '../types'
 import { useAppStore } from '../store/useAppStore'
 import { getProjectIconComponent } from './ProjectIcon'
+import { useProjectContextMenuFocus } from './useProjectContextMenuFocus'
+import { SidebarVisibilityMenuItem } from './SidebarVisibilityMenuItem'
 import {
   renameTarget,
+  resolveTargetAgentPinned,
   resolveTargetProjectIconId,
   resolveTargetSpacePinned,
   resolveTargetLabelColor,
   resolveTargetName,
   resolveTargetSpacePath,
   setTargetProjectIconId,
+  setTargetAgentPinned,
   setTargetSpacePinned,
   setTargetLabelColor,
 } from './ProjectContextMenu.state'
@@ -66,6 +70,7 @@ export function ProjectContextMenu({
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameDraft, setRenameDraft] = useState(targetName ?? '')
   const renameInputRef = useRef<HTMLInputElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const openInFileManagerLabel =
     platform === 'win32'
       ? t('projectContextMenu.openInExplorer')
@@ -74,13 +79,16 @@ export function ProjectContextMenu({
         : t('projectContextMenu.openInFileManager')
   const isProjectTarget = resolvedTarget.kind === 'project'
   const isSpaceTarget = resolvedTarget.kind === 'space'
+  const isAgentTarget = resolvedTarget.kind === 'agent'
+  const isInlineEditorTarget = isSpaceTarget || isAgentTarget
   const supportsLabelColor = resolvedTarget.kind !== 'project'
   const currentProjectIconId = resolveTargetProjectIconId(workspaces, resolvedTarget)
   const currentLabelColor = resolveTargetLabelColor(workspaces, resolvedTarget)
   const isSpacePinned = resolveTargetSpacePinned(workspaces, resolvedTarget)
+  const isAgentPinned = resolveTargetAgentPinned(resolvedTarget)
   const estimatedWidth = isRenaming
     ? 236
-    : isSpaceTarget
+    : isInlineEditorTarget
       ? 218
       : canOpenInFileManager && isProjectTarget
         ? 218
@@ -89,41 +97,24 @@ export function ProjectContextMenu({
           : 176
   const estimatedHeight = isRenaming
     ? 96
-    : isSpaceTarget
-      ? 206
+    : isInlineEditorTarget
+      ? 132
       : canOpenInFileManager && isProjectTarget
         ? 218
         : isProjectTarget
           ? 182
-          : resolvedTarget.kind === 'agent'
-            ? 124
-            : 102
+          : 102
 
   useEffect(() => {
     setRenameDraft(targetName ?? '')
   }, [targetName])
 
-  useEffect(() => {
-    if (!isRenaming) {
-      return
-    }
-
-    window.setTimeout(() => {
-      renameInputRef.current?.focus()
-      renameInputRef.current?.select()
-    }, 0)
-  }, [isRenaming])
-
-  useEffect(() => {
-    if (!isSpaceTarget || isRenaming) {
-      return
-    }
-
-    window.setTimeout(() => {
-      renameInputRef.current?.focus()
-      renameInputRef.current?.select()
-    }, 0)
-  }, [isRenaming, isSpaceTarget, targetName])
+  useProjectContextMenuFocus({
+    menuRef,
+    inputRef: renameInputRef,
+    isEditing: isRenaming || isInlineEditorTarget,
+    targetKey: `${workspaceId}:${resolvedTarget.kind}:${resolvedTarget.kind === 'space' ? resolvedTarget.spaceId : resolvedTarget.kind === 'agent' ? resolvedTarget.nodeId : ''}`,
+  })
 
   if (targetName === null) {
     return null
@@ -178,6 +169,10 @@ export function ProjectContextMenu({
     setTargetSpacePinned(resolvedTarget, !isSpacePinned)
     useAppStore.getState().setProjectContextMenu(null)
   }
+  const toggleAgentPinned = (): void => {
+    setTargetAgentPinned(resolvedTarget, !isAgentPinned)
+    useAppStore.getState().setProjectContextMenu(null)
+  }
 
   const renderColorButton = ({
     id,
@@ -198,6 +193,7 @@ export function ProjectContextMenu({
         className={`workspace-project-context-menu__color-button${selected ? ' workspace-project-context-menu__color-button--selected' : ''}`}
         data-testid={`workspace-project-context-menu-label-color-${id}`}
         aria-label={label}
+        aria-pressed={selected}
         title={label}
         onClick={() => {
           commitLabelColor(labelColor)
@@ -210,7 +206,9 @@ export function ProjectContextMenu({
           }
           aria-hidden="true"
         />
-        {selected ? <Check className="workspace-project-context-menu__color-check" /> : null}
+        {selected ? (
+          <Check className="workspace-project-context-menu__color-check" aria-hidden="true" />
+        ) : null}
       </button>
     )
   }
@@ -271,13 +269,16 @@ export function ProjectContextMenu({
         className={`workspace-project-context-menu__project-icon-button${selected ? ' workspace-project-context-menu__project-icon-button--selected' : ''}`}
         data-testid={`workspace-project-context-menu-icon-${id}`}
         aria-label={label}
+        aria-pressed={selected}
         title={label}
         onClick={() => {
           commitProjectIcon(iconId)
         }}
       >
         <Icon className="workspace-project-context-menu__project-icon" aria-hidden="true" />
-        {selected ? <Check className="workspace-project-context-menu__icon-check" /> : null}
+        {selected ? (
+          <Check className="workspace-project-context-menu__icon-check" aria-hidden="true" />
+        ) : null}
       </button>
     )
   }
@@ -314,7 +315,13 @@ export function ProjectContextMenu({
 
   return (
     <ViewportMenuSurface
+      ref={menuRef}
       open={true}
+      mobileTitle={isRenaming ? t('projectContextMenu.rename') : targetName}
+      onBack={isRenaming ? () => setIsRenaming(false) : undefined}
+      initialFocusRef={isRenaming || isInlineEditorTarget ? renameInputRef : undefined}
+      onDismiss={() => useAppStore.getState().setProjectContextMenu(null)}
+      dismissOnEscape
       className={`workspace-context-menu workspace-project-context-menu workspace-project-context-menu--${resolvedTarget.kind}`}
       placement={{
         type: 'point',
@@ -325,7 +332,7 @@ export function ProjectContextMenu({
         },
       }}
     >
-      {isSpaceTarget && !isRenaming ? (
+      {isInlineEditorTarget && !isRenaming ? (
         <>
           <form
             className="workspace-project-context-menu__space-editor"
@@ -469,21 +476,44 @@ export function ProjectContextMenu({
           </button>
         </>
       ) : null}
-      {!isRenaming && isProjectTarget ? (
+      {!isRenaming && isAgentTarget ? (
         <button
           type="button"
-          data-testid={`workspace-project-remove-${workspaceId}`}
-          onClick={() => {
-            onRequestRemove(workspaceId)
-          }}
+          data-testid={`workspace-agent-context-pin-${resolvedTarget.nodeId}`}
+          onClick={toggleAgentPinned}
         >
-          <FolderX className="workspace-context-menu__icon" aria-hidden="true" />
+          {isAgentPinned ? (
+            <PinOff className="workspace-context-menu__icon" aria-hidden="true" />
+          ) : (
+            <Pin className="workspace-context-menu__icon" aria-hidden="true" />
+          )}
           <span className="workspace-context-menu__label">
-            {t('projectContextMenu.removeProject')}
+            {isAgentPinned ? t('projectContextMenu.unpinAgent') : t('projectContextMenu.pinAgent')}
           </span>
         </button>
       ) : null}
-      {!isRenaming && supportsLabelColor && !isSpaceTarget ? renderColorRow('section') : null}
+      {!isRenaming && isProjectTarget ? (
+        <>
+          <div className="workspace-context-menu__separator" />
+          <button
+            type="button"
+            data-testid={`workspace-project-remove-${workspaceId}`}
+            className="workspace-context-menu__item--danger"
+            onClick={() => {
+              onRequestRemove(workspaceId)
+            }}
+          >
+            <FolderX className="workspace-context-menu__icon" aria-hidden="true" />
+            <span className="workspace-context-menu__label">
+              {t('projectContextMenu.removeProject')}
+            </span>
+          </button>
+        </>
+      ) : null}
+      {!isRenaming && supportsLabelColor && !isInlineEditorTarget
+        ? renderColorRow('section')
+        : null}
+      {!isRenaming ? <SidebarVisibilityMenuItem target={resolvedTarget} /> : null}
     </ViewportMenuSurface>
   )
 }

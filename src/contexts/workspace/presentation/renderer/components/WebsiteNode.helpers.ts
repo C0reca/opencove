@@ -13,7 +13,7 @@ export const HIDDEN_WEBSITE_BOUNDS: WebsiteWindowBounds = {
   height: 0,
 }
 
-function resolveViewportBounds(element: HTMLDivElement | null): WebsiteWindowBounds | null {
+function resolveViewportBounds(element: Element | null): WebsiteWindowBounds | null {
   if (!element) {
     return null
   }
@@ -142,6 +142,55 @@ function normalizeBounds(bounds: WebsiteWindowBounds): WebsiteWindowBounds {
   }
 }
 
+/** Clip only the native host; the browser viewport retains its full layout dimensions. */
+function resolvePixelRevealBounds(
+  element: HTMLDivElement | null,
+  bounds: WebsiteWindowBounds,
+): WebsiteWindowBounds {
+  const node = element?.closest('.react-flow__node')
+  if (!(node instanceof HTMLElement)) {
+    return bounds
+  }
+  const value = getComputedStyle(node).getPropertyValue('--cove-pixel-reveal-front').trim()
+  const front = Number(value)
+  if (!value || !Number.isFinite(front)) {
+    return bounds
+  }
+  const rect = node.getBoundingClientRect()
+  if (!Number.isFinite(rect.left) || !Number.isFinite(rect.width)) {
+    return bounds
+  }
+  const dpr =
+    Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0
+      ? window.devicePixelRatio
+      : 1
+  const right = Math.floor((rect.left + rect.width * Math.min(1, Math.max(0, front))) * dpr) / dpr
+  const width = Math.max(0, Math.min(bounds.x + bounds.width, right) - bounds.x)
+  return width > 0 ? { ...bounds, width } : HIDDEN_WEBSITE_BOUNDS
+}
+
+/** Native views cannot inherit DOM overflow clipping during the shell's fold/unfold. */
+function resolveCollapseMotionBounds(
+  element: HTMLDivElement | null,
+  bounds: WebsiteWindowBounds,
+): WebsiteWindowBounds {
+  const shell = element?.closest('.cove-node-presentation[data-cove-collapse-motion]')
+  if (!shell) {
+    return bounds
+  }
+  const surface = shell.querySelector('.cove-node-presentation__surface')
+  let visible = bounds
+  for (const clipElement of surface ? [shell, surface] : [shell]) {
+    const clip = resolveViewportBounds(clipElement)
+    const intersection = clip ? intersectBounds(visible, clip) : null
+    if (!intersection) {
+      return HIDDEN_WEBSITE_BOUNDS
+    }
+    visible = intersection
+  }
+  return visible
+}
+
 export function resolveViewportState(
   element: HTMLDivElement | null,
   canvasZoom: number,
@@ -164,7 +213,7 @@ export function resolveViewportState(
   }
 
   return {
-    bounds: visibleBounds,
+    bounds: resolveCollapseMotionBounds(element, resolvePixelRevealBounds(element, visibleBounds)),
     viewportBounds,
     canvasZoom,
   }

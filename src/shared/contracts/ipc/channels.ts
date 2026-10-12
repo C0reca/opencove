@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
   filesystemDeleteEntry: 'filesystem:delete-entry',
   filesystemReadDirectory: 'filesystem:read-directory',
   filesystemStat: 'filesystem:stat',
+  filesystemResolveDroppedPath: 'filesystem:resolve-dropped-path',
   workspaceSelectDirectory: 'workspace:select-directory',
   workspaceEnsureDirectory: 'workspace:ensure-directory',
   workspaceCopyPath: 'workspace:copy-path',
@@ -133,6 +134,7 @@ export const IPC_CHANNELS = {
   workerClientSetWebUiSecurity: 'worker-client:set-web-ui-security',
   workerClientRelaunch: 'worker-client:relaunch',
   controlSurfaceInvoke: 'control-surface:invoke',
+  controlSurfacePluginResourceUrl: 'control-surface:plugin-resource-url',
 } as const
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

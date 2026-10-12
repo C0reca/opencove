@@ -5,31 +5,29 @@ import {
   type CanvasWheelBehavior,
   type CanvasWheelZoomModifier,
   type FocusNodeTargetZoom,
+  type NodeExpandBehavior,
   type StandardWindowSizeBucket,
 } from '@contexts/settings/domain/agentSettings'
-import type { TerminalProfile } from '@shared/contracts/dto'
 import { CanvasSection } from './CanvasSection'
-import { TerminalProfileSection } from './TerminalProfileSection'
+import { WindowSizeSection } from './TerminalProfileSection'
 
 export function CanvasWindowsSection({
   canvasInputMode,
   canvasWheelBehavior,
   canvasWheelZoomModifier,
   standardWindowSizeBucket,
+  nodeExpandBehavior,
   viewportTransition,
   focusNodeOnClick,
   focusNodeTargetZoom,
   focusNodeUseVisibleCanvasCenter,
   archiveSpaceDeleteWorktreeByDefault,
   archiveSpaceDeleteBranchByDefault,
-  defaultTerminalProfileId,
-  terminalProfiles,
-  detectedDefaultTerminalProfileId,
   onChangeCanvasInputMode,
   onChangeCanvasWheelBehavior,
   onChangeCanvasWheelZoomModifier,
   onChangeStandardWindowSizeBucket,
-  onChangeDefaultTerminalProfileId,
+  onChangeNodeExpandBehavior,
   onChangeViewportTransition,
   onChangeFocusNodeOnClick,
   onChangeFocusNodeTargetZoom,
@@ -42,20 +40,18 @@ export function CanvasWindowsSection({
   canvasWheelBehavior: CanvasWheelBehavior
   canvasWheelZoomModifier: CanvasWheelZoomModifier
   standardWindowSizeBucket: StandardWindowSizeBucket
+  nodeExpandBehavior: NodeExpandBehavior
   viewportTransition: ViewportTransition
   focusNodeOnClick: boolean
   focusNodeTargetZoom: FocusNodeTargetZoom
   focusNodeUseVisibleCanvasCenter: boolean
   archiveSpaceDeleteWorktreeByDefault: boolean
   archiveSpaceDeleteBranchByDefault: boolean
-  defaultTerminalProfileId: string | null
-  terminalProfiles: TerminalProfile[]
-  detectedDefaultTerminalProfileId: string | null
   onChangeCanvasInputMode: (mode: CanvasInputMode) => void
   onChangeCanvasWheelBehavior: (behavior: CanvasWheelBehavior) => void
   onChangeCanvasWheelZoomModifier: (modifier: CanvasWheelZoomModifier) => void
   onChangeStandardWindowSizeBucket: (bucket: StandardWindowSizeBucket) => void
-  onChangeDefaultTerminalProfileId: (profileId: string | null) => void
+  onChangeNodeExpandBehavior: (behavior: NodeExpandBehavior) => void
   onChangeViewportTransition: (effect: ViewportTransition) => void
   onChangeFocusNodeOnClick: (enabled: boolean) => void
   onChangeFocusNodeTargetZoom: (zoom: FocusNodeTargetZoom) => void
@@ -87,13 +83,11 @@ export function CanvasWindowsSection({
         onChangeArchiveSpaceDeleteBranchByDefault={onChangeArchiveSpaceDeleteBranchByDefault}
         onFocusNodeTargetZoomPreviewChange={onFocusNodeTargetZoomPreviewChange}
       />
-      <TerminalProfileSection
+      <WindowSizeSection
         standardWindowSizeBucket={standardWindowSizeBucket}
-        defaultTerminalProfileId={defaultTerminalProfileId}
-        terminalProfiles={terminalProfiles}
-        detectedDefaultTerminalProfileId={detectedDefaultTerminalProfileId}
         onChangeStandardWindowSizeBucket={onChangeStandardWindowSizeBucket}
-        onChangeDefaultTerminalProfileId={onChangeDefaultTerminalProfileId}
+        nodeExpandBehavior={nodeExpandBehavior}
+        onChangeNodeExpandBehavior={onChangeNodeExpandBehavior}
       />
     </>
   )

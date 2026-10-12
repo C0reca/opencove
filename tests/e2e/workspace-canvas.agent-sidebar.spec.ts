@@ -303,35 +303,24 @@ test.describe('Workspace Canvas - Agent Sidebar', () => {
         .locator('.terminal-node')
         .filter({
           has: window.locator('.terminal-node__title', {
-            hasText: 'claude · Clarify API contract with PM',
+            hasText: 'Clarify API contract with PM',
           }),
         })
         .first()
 
-      const workspaceToggle = window.locator(
-        '[data-testid="workspace-item-toggle-workspace-seeded"]',
-      )
-      await expect(workspaceToggle).toHaveAttribute('aria-expanded', 'true')
-
-      await workspaceToggle.click()
-      await expect(doingItem).toHaveCount(0)
-      await expect(workspaceToggle).toHaveAttribute('aria-expanded', 'false')
-
-      await workspaceToggle.click()
-      await expect(doingItem).toHaveCount(1)
-      await expect(workspaceToggle).toHaveAttribute('aria-expanded', 'true')
+      await expect(window.locator('.workspace-space-group--root')).toHaveCount(0)
+      await expect(doingItem).toBeVisible()
+      await expect(requestItem).toBeVisible()
+      await expect(doneItem).toBeVisible()
 
       await requestItem.click()
       await expect(requestNode).toBeVisible()
 
-      await expect(doingItem.locator('.workspace-agent-item__status--agent')).toHaveText(
-        'Standby',
-        { timeout: 30_000 },
-      )
-      await expect(requestItem.locator('.workspace-agent-item__status--agent')).toHaveText(
-        'Standby',
-      )
-      await expect(doneItem.locator('.workspace-agent-item__status--agent')).toHaveText('Standby', {
+      await expect(doingItem.locator('.workspace-agent-item__status-label')).toHaveText('Standby', {
+        timeout: 30_000,
+      })
+      await expect(requestItem.locator('.workspace-agent-item__status-label')).toHaveText('Standby')
+      await expect(doneItem.locator('.workspace-agent-item__status-label')).toHaveText('Standby', {
         timeout: 30_000,
       })
 

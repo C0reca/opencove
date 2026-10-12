@@ -1,7 +1,7 @@
 import React from 'react'
 import type { Node } from '@xyflow/react'
 import type { TerminalNodeData } from '../../../types'
-import { findNearestFreePositionOnRight, type Rect } from '../../../utils/collision'
+import { repositionCreatedExplorerNode } from './useSpaceExplorer.materializePlacement'
 import type { WorkspaceCanvasQuickPreviewState } from '../types'
 import { assignNodeToSpaceAndExpand } from './useInteractions.spaceAssignment'
 import {
@@ -22,6 +22,7 @@ import { resolveFilesystemApiForMount } from '../../../utils/mountAwareFilesyste
 import { useWorkspaceDocumentOpening } from './useWorkspaceDocumentOpening'
 
 export function useWorkspaceCanvasSpaceExplorer({
+  workspaceId,
   canvasRef,
   spaces,
   spacesRef,
@@ -33,10 +34,13 @@ export function useWorkspaceCanvasSpaceExplorer({
   nodeDragSession,
   finalizeDraggedNodeDrop,
   createDocumentNode,
+  expandNode,
   createImageNode,
   standardWindowSizeBucket,
 }: WorkspaceCanvasSpaceExplorerArgs): WorkspaceCanvasSpaceExplorerResult {
   const openDocument = useWorkspaceDocumentOpening({
+    workspaceId,
+    expandNode,
     spacesRef,
     nodesRef,
     setNodes,
@@ -234,9 +238,7 @@ export function useWorkspaceCanvasSpaceExplorer({
         })
       }
 
-      const filesystem = resolveFilesystemApiForMount(
-        preview.mountId ?? space.targetMountId ?? null,
-      )
+      const filesystem = resolveFilesystemApiForMount(preview.mountId)
       const workspace = window.opencoveApi?.workspace
       const mimeType = resolveCanvasImageMimeType(preview.uri)
       if (!filesystem?.readFileBytes || !workspace?.writeCanvasImage || !mimeType) {
@@ -300,39 +302,16 @@ export function useWorkspaceCanvasSpaceExplorer({
           return null
         }
 
-        const preferRightPlacement = creationPlacement.preferredDirection === 'right'
-        if (preferRightPlacement && preview.createPlacement?.avoidRects?.length) {
-          const avoidObstacles: Rect[] = preview.createPlacement.avoidRects.map(avoidRect => ({
-            left: avoidRect.x,
-            top: avoidRect.y,
-            right: avoidRect.x + avoidRect.width,
-            bottom: avoidRect.y + avoidRect.height,
-          }))
-          const desired = creationAnchor
-          const size = { width: created.data.width, height: created.data.height }
-          const nextPlacement = findNearestFreePositionOnRight(
-            desired,
-            size,
-            nodesRef.current,
-            created.id,
-            avoidObstacles,
-          )
-
-          if (
-            nextPlacement &&
-            (nextPlacement.x !== created.position.x || nextPlacement.y !== created.position.y)
-          ) {
-            setNodes(
-              prevNodes =>
-                prevNodes.map(node =>
-                  node.id === created.id ? { ...node, position: nextPlacement } : node,
-                ),
-              { syncLayout: false },
-            )
-          }
-        }
+        repositionCreatedExplorerNode({
+          created,
+          creationAnchor,
+          creationPlacement,
+          nodesRef,
+          setNodes,
+        })
 
         assignNodeToSpaceAndExpand({
+          workspaceId,
           createdNodeId: created.id,
           createdNode: created,
           targetSpaceId: space.id,
@@ -349,6 +328,7 @@ export function useWorkspaceCanvasSpaceExplorer({
       }
     },
     [
+      workspaceId,
       openDocument,
       createImageNode,
       nodesRef,

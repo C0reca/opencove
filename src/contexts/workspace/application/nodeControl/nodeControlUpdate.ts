@@ -18,7 +18,9 @@ import { clampFrameSize, normalizeUpdateNodeData } from './nodeDataFactory'
 export async function updateNodeForNodeControl(options: {
   store: NodeControlAppStateStore
   input: UpdateNodeInput
+  assertActive?: () => void
 }): Promise<UpdateNodeResult> {
+  const expectedRevision = await options.store.readAppStateRevision()
   const state = requireNodeControlState(await options.store.readAppState())
   const matched = findNodeForNodeControl(state.workspaces, options.input.nodeId)
   if (!matched) {
@@ -39,9 +41,11 @@ export async function updateNodeForNodeControl(options: {
     ...matched.workspace,
     nodes: matched.workspace.nodes.map(node => (node.id === nextNode.id ? nextNode : node)),
   }
+  options.assertActive?.()
   const revision = await persistNodeControlState(
     options.store,
     replaceNodeControlWorkspace(state, nextWorkspace),
+    expectedRevision,
   )
 
   return {

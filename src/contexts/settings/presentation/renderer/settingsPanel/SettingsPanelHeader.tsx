@@ -1,19 +1,14 @@
-import type { JSX } from 'react'
-import { X } from 'lucide-react'
-import { IconButton } from '@app/renderer/components/ui/IconButton'
-import { useTranslation } from '@app/renderer/i18n'
+import type { JSX, ReactNode } from 'react'
 
 export function SettingsPanelHeader({
   title,
   description,
-  onClose,
+  search,
 }: {
   title: string
   description: string
-  onClose: () => void
+  search?: ReactNode
 }): JSX.Element {
-  const { t } = useTranslation()
-
   return (
     <div className="settings-panel__header">
       <div className="settings-panel__header-copy">
@@ -26,16 +21,7 @@ export function SettingsPanelHeader({
           </p>
         ) : null}
       </div>
-      <IconButton
-        size="md"
-        variant="ghost"
-        className="settings-panel__close"
-        data-testid="settings-panel-close"
-        label={t('common.close')}
-        onClick={onClose}
-      >
-        <X size={18} aria-hidden="true" />
-      </IconButton>
+      {search}
     </div>
   )
 }

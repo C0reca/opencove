@@ -1,4 +1,6 @@
-import { Bot, Play, X } from 'lucide-react'
+import { Play, X } from 'lucide-react'
+import { NodeKindIcon } from './shared/NodeKindIcon'
+import { WindowCollapseButton } from './shared/WindowCollapseButton'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { Handle, Position } from '@xyflow/react'
@@ -97,6 +99,8 @@ export function RoleNode({
   return (
     <div
       className="role-node nowheel"
+      data-cove-part="window"
+      data-cove-kind="role"
       style={style}
       data-testid="role-node"
       onClickCapture={event => {
@@ -129,14 +133,23 @@ export function RoleNode({
     >
       <Handle type="target" position={Position.Left} className="workspace-node-handle" />
       <Handle type="source" position={Position.Right} className="workspace-node-handle" />
-      <div className="role-node__header" data-node-drag-handle="true">
-        <Bot className="role-node__icon" aria-hidden="true" />
+      <div
+        className="role-node__header"
+        data-cove-part="window-header"
+        data-node-drag-handle="true"
+      >
+        <NodeKindIcon kind="role" className="role-node__icon" />
         <div className="role-node__title-stack">
-          <div className="role-node__title" data-testid="role-node-title">
+          <div
+            className="role-node__title"
+            data-cove-part="window-title"
+            data-testid="role-node-title"
+          >
             {title.trim().length > 0 ? title : role.roleName}
           </div>
           <div className="role-node__meta">{AGENT_PROVIDER_LABEL[selectedProvider]}</div>
         </div>
+        <WindowCollapseButton onClose={onClose} />
         <button
           type="button"
           className="role-node__icon-button nodrag"

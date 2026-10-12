@@ -14,6 +14,7 @@ export interface FileSystemStat {
 }
 
 export interface ReadFileTextInput {
+  maxBytes?: number
   uri: string
 }
 
@@ -34,6 +35,7 @@ export interface ReadFileBytesInMountInput extends MountAwareInput {
 }
 
 export interface WriteFileTextInput {
+  overwrite?: boolean
   uri: string
   content: string
 }
@@ -54,6 +56,7 @@ export interface RenameEntryInput {
 }
 
 export interface DeleteEntryInput {
+  recursive?: boolean
   uri: string
 }
 
@@ -62,10 +65,12 @@ export interface CreateDirectoryInput {
 }
 
 export interface ReadDirectoryInput {
+  maxEntries?: number
   uri: string
 }
 
 export interface ReadDirectoryResult {
+  truncated?: boolean
   entries: FileSystemEntry[]
 }
 
@@ -78,6 +83,7 @@ export interface MountAwareInput {
 }
 
 export interface ReadFileTextInMountInput extends MountAwareInput {
+  maxBytes?: number
   uri: string
 }
 
@@ -86,6 +92,7 @@ export interface ReadFileBytesInMountInput extends MountAwareInput {
 }
 
 export interface WriteFileTextInMountInput extends MountAwareInput {
+  overwrite?: boolean
   uri: string
   content: string
 }
@@ -95,6 +102,7 @@ export interface StatInMountInput extends MountAwareInput {
 }
 
 export interface ReadDirectoryInMountInput extends MountAwareInput {
+  maxEntries?: number
   uri: string
 }
 
@@ -103,6 +111,7 @@ export interface CreateDirectoryInMountInput extends MountAwareInput {
 }
 
 export interface DeleteEntryInMountInput extends MountAwareInput {
+  recursive?: boolean
   uri: string
 }
 

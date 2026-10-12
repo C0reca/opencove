@@ -4,7 +4,9 @@ import type { TerminalNodeData, WorkspaceSpaceRect, WorkspaceSpaceState } from '
 import type { SpaceDragState } from '../types'
 import { type LayoutDirection } from '../../../utils/spaceLayout'
 import { projectWorkspacePushAwayLayout } from '../../../utils/workspacePushAwayProjection'
-import { projectChildSpaceMoveWithinParent } from './useSpaceDrag.childProjection'
+import { projectChildSpaceWithinParent } from './useSpaceDrag.childProjection'
+import { projectSpaceDragWithCollapse, type SpaceDragLayoutInput } from './useSpaceDrag.collapse'
+import { containChildSpaceResizeLayout } from './useSpaceDrag.containment'
 
 type SetNodes = (
   updater: (prevNodes: Node<TerminalNodeData>[]) => Node<TerminalNodeData>[],
@@ -20,21 +22,20 @@ export interface ProjectedSpaceDragLayout {
   nextNodePositionById: Map<string, { x: number; y: number }>
 }
 
-export function projectWorkspaceSpaceDragLayout({
+export function projectWorkspaceSpaceDragLayout(
+  input: SpaceDragLayoutInput,
+): ProjectedSpaceDragLayout | null {
+  return projectSpaceDragWithCollapse(input, projectSpaceDragLayout)
+}
+
+function projectSpaceDragLayout({
   dragState,
   dx,
   dy,
   nodes,
   spaces,
   resolveResizedRect,
-}: {
-  dragState: SpaceDragState
-  dx: number
-  dy: number
-  nodes: Node<TerminalNodeData>[]
-  spaces: WorkspaceSpaceState[]
-  resolveResizedRect: ResolveResizedRect
-}): ProjectedSpaceDragLayout | null {
+}: SpaceDragLayoutInput): ProjectedSpaceDragLayout | null {
   const baselineNodes = restoreBaselineNodes(nodes, dragState.allNodePositions)
   const handle = dragState.handle
   const targetSpace = spaces.find(space => space.id === dragState.spaceId) ?? null
@@ -98,7 +99,7 @@ export function projectWorkspaceSpaceDragLayout({
     })
 
     if (targetSpace?.parentSpaceId) {
-      const projected = projectChildSpaceMoveWithinParent({
+      const projected = projectChildSpaceWithinParent({
         targetSpaceId: dragState.spaceId,
         parentSpaceId: targetSpace.parentSpaceId,
         draftSpaces,
@@ -140,7 +141,10 @@ export function projectWorkspaceSpaceDragLayout({
     spaces,
   })
   if (rectEquals(nextRect, dragState.initialRect)) {
-    return null
+    return {
+      nextSpaces: spaces,
+      nextNodePositionById: new Map(baselineNodes.map(node => [node.id, node.position])),
+    }
   }
 
   const draftSpaces = spaces.map(space =>
@@ -153,10 +157,29 @@ export function projectWorkspaceSpaceDragLayout({
   )
 
   if (targetSpace?.parentSpaceId) {
-    return {
-      nextSpaces: draftSpaces,
-      nextNodePositionById: new Map(),
-    }
+    const projected = projectChildSpaceWithinParent({
+      targetSpaceId: dragState.spaceId,
+      parentSpaceId: targetSpace.parentSpaceId,
+      draftSpaces,
+      previousSpaces: spaces,
+      draftNodes: baselineNodes,
+      movedSpaceIds,
+      owningSpaceIdByNodeId,
+      draggedNodeIds: new Set(),
+      directions: resolveResizeDirections(dragState.initialRect, nextRect),
+      childSpaceDragPadding: CHILD_SPACE_DRAG_PADDING,
+      allowParentExpansion: true,
+    })
+    return containChildSpaceResizeLayout(
+      propagateMovedParentDeltas({
+        projected,
+        previousSpaces: spaces,
+        baselineNodes,
+        excludeParentIds: new Set([dragState.spaceId]),
+      }),
+      targetSpace.parentSpaceId,
+      baselineNodes,
+    )
   }
 
   const pinnedResizeGroupIds = [

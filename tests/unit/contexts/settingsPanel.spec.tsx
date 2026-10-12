@@ -115,8 +115,7 @@ describe('SettingsPanel', () => {
     })
     renderSettingsPanel({ onChange })
 
-    const canvasNav = screen.getByTestId('settings-section-nav-canvas')
-    fireEvent.click(canvasNav)
+    fireEvent.click(screen.getByTestId('settings-section-nav-terminal'))
 
     const trigger = screen.getByTestId('settings-terminal-profile-trigger')
     expect(trigger).toBeVisible()
@@ -131,11 +130,14 @@ describe('SettingsPanel', () => {
     })
   })
 
-  it('exposes terminal display consistency controls in display settings', () => {
+  it('exposes terminal display consistency controls inside the Terminal calibration disclosure', () => {
     mockTerminalProfiles()
     renderSettingsPanel()
 
-    fireEvent.click(screen.getByTestId('settings-section-nav-appearance'))
+    fireEvent.click(screen.getByTestId('settings-section-nav-terminal'))
+    const disclosure = screen.getByTestId('settings-terminal-calibration-disclosure')
+    expect(disclosure).not.toHaveAttribute('open')
+    fireEvent.click(disclosure.querySelector('summary')!)
 
     expect(screen.getByText('Terminal Display Consistency')).toBeVisible()
     expect(screen.getByText('Set Reference Automatically')).toBeVisible()
@@ -148,20 +150,6 @@ describe('SettingsPanel', () => {
     ).toBe(true)
     expect(screen.getByTestId('settings-terminal-display-set-reference')).toBeVisible()
     expect(screen.getByTestId('settings-terminal-display-calibrate')).toBeDisabled()
-  })
-
-  it('allows reordering agent providers', () => {
-    const onChange = vi.fn()
-    mockTerminalProfiles()
-    renderSettingsPanel({ onChange })
-
-    fireEvent.click(screen.getByTestId('settings-section-nav-agent'))
-    fireEvent.click(screen.getByTestId('settings-agent-order-move-down-claude-code'))
-
-    expect(onChange).toHaveBeenCalledWith({
-      ...DEFAULT_AGENT_SETTINGS,
-      agentProviderOrder: ['codex', 'claude-code', 'opencode', 'gemini', 'pi', 'kimi'],
-    })
   })
 
   it('hides compatibility-only providers without rewriting a persisted default', () => {
@@ -180,7 +168,10 @@ describe('SettingsPanel', () => {
 
     expect(screen.queryByTestId('settings-agent-order-item-gemini')).not.toBeInTheDocument()
     expect(screen.queryByTestId('settings-default-provider-gemini')).not.toBeInTheDocument()
-    expect(screen.getByTestId('settings-default-provider-claude-code')).toBeChecked()
+    expect(screen.getByTestId('settings-agent-order-item-claude-code')).toHaveAttribute(
+      'data-default',
+      'true',
+    )
     expect(onChange).not.toHaveBeenCalled()
   })
 
@@ -263,6 +254,21 @@ describe('SettingsPanel', () => {
     })
   })
 
+  it('changes collapsed-window expansion from canvas settings', () => {
+    const onChange = vi.fn()
+    mockTerminalProfiles()
+    renderSettingsPanel({ onChange })
+    fireEvent.click(screen.getByTestId('settings-section-nav-canvas'))
+    const trigger = screen.getByTestId('settings-node-expand-behavior-trigger')
+    expect(trigger).toHaveTextContent('Expand in place, push other windows aside')
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('option', { name: 'Expand in nearby free space' }))
+    expect(onChange).toHaveBeenCalledWith({
+      ...DEFAULT_AGENT_SETTINGS,
+      nodeExpandBehavior: 'find-space',
+    })
+  })
+
   it('toggles visible-canvas centering from canvas settings', () => {
     const onChange = vi.fn()
     mockTerminalProfiles()
@@ -342,49 +348,39 @@ describe('SettingsPanel', () => {
     expect(onDownloadUpdate).toHaveBeenCalledTimes(1)
   })
 
-  it('toggles remote workers from Worker & Connections settings', () => {
+  it('offers remote connections without changing the saved legacy preference', async () => {
     const onChange = vi.fn()
     mockTerminalProfiles()
     installSettingsPanelWorkerApi()
-    renderSettingsPanel({ onChange })
+    renderSettingsPanel({
+      onChange,
+      settings: { ...DEFAULT_AGENT_SETTINGS, experimentalRemoteWorkersEnabled: false },
+    })
 
     fireEvent.click(screen.getByTestId('settings-section-nav-worker'))
-    fireEvent.click(screen.getByTestId('settings-experimental-remote-workers-enabled'))
-
-    expect(onChange).toHaveBeenCalledWith({
-      ...DEFAULT_AGENT_SETTINGS,
-      experimentalRemoteWorkersEnabled: true,
-    })
+    expect(await screen.findByTestId('settings-endpoints-open-register')).toBeVisible()
+    expect(screen.queryByTestId('settings-endpoints-empty-register')).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('settings-experimental-remote-workers-enabled'),
+    ).not.toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+    expect(window.opencoveApi.workerClient.setConfig).not.toHaveBeenCalled()
+    expect(window.opencoveApi.worker.start).not.toHaveBeenCalled()
+    expect(window.opencoveApi.worker.stop).not.toHaveBeenCalled()
   })
 
-  it('keeps endpoints inside Worker settings and gates registration until enabled', () => {
+  it('keeps the legacy endpoints route and shows registration with a disabled legacy flag', async () => {
     mockTerminalProfiles()
     installSettingsPanelWorkerApi()
-    const { rerender } = renderSettingsPanel()
-
-    fireEvent.click(screen.getByTestId('settings-section-nav-worker'))
-    expect(screen.getByText('Remote machines disabled')).toBeVisible()
-    expect(screen.queryByTestId('settings-endpoints-empty-register')).not.toBeInTheDocument()
-
-    rerender(
-      <SettingsPanel
-        settings={{ ...DEFAULT_AGENT_SETTINGS, experimentalRemoteWorkersEnabled: true }}
-        updateState={createUpdateState()}
-        modelCatalogByProvider={createModelCatalog()}
-        workspaces={[]}
-        onWorkspaceWorktreesRootChange={() => undefined}
-        onWorkspaceEnvironmentVariablesChange={() => undefined}
-        isFocusNodeTargetZoomPreviewing={false}
-        onFocusNodeTargetZoomPreviewChange={() => undefined}
-        onChange={() => undefined}
-        onCheckForUpdates={() => undefined}
-        onDownloadUpdate={() => undefined}
-        onInstallUpdate={() => undefined}
-        onClose={() => undefined}
-      />,
+    renderSettingsPanel({
+      initialPageId: 'endpoints',
+      settings: { ...DEFAULT_AGENT_SETTINGS, experimentalRemoteWorkersEnabled: false },
+    })
+    expect(await screen.findByTestId('settings-endpoints-open-register')).toBeVisible()
+    expect(screen.getByRole('group', { name: 'Remote Connections' })).toBeVisible()
+    expect(screen.getByRole('group', { name: 'Browser Access' })).toContainElement(
+      screen.getByRole('group', { name: 'Access Security' }),
     )
-
-    expect(screen.getByTestId('settings-endpoints-empty-register')).toBeVisible()
   })
 
   it('toggles the opt-in header performance monitor button from diagnostics settings', () => {

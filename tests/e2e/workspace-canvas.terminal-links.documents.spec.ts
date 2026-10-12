@@ -16,7 +16,7 @@ import {
   terminalLinkCellPoint,
 } from './workspace-canvas.terminal-links.helpers'
 
-test('opens a terminal file link at its line and column and reuses the document', async ({
+test('opens a terminal file link at its line and column and restores its collapsed document', async ({
   browserName,
 }, testInfo) => {
   const directory = path.join(testWorkspacePath, 'artifacts', 'e2e', 'terminal-links', randomUUID())
@@ -57,6 +57,17 @@ test('opens a terminal file link at its line and column and reuses the document'
       .poll(async () => (await readFile(filePath, 'utf8')).split('\n')[11])
       .toBe('linLINK_INSERT_e-12-content')
 
+    const documentId = await document.evaluate(element =>
+      element.closest('.react-flow__node')?.getAttribute('data-id'),
+    )
+    expect(documentId).toBeTruthy()
+    await document
+      .locator('.monaco-editor')
+      .evaluate(element => element.setAttribute('data-link-editor-identity', 'preserved'))
+    await document.getByTestId('node-collapse').click()
+    const compactDocument = window.getByTestId(`collapsed-node-${documentId}`)
+    await expect(compactDocument).toBeVisible()
+
     await window.locator('.react-flow__controls-fitview').click()
     await clearTerminalLinkSelection(window, nodeId)
     const secondPoint = await terminalLinkCellPoint(window, nodeId, 3, 1)
@@ -64,7 +75,17 @@ test('opens a terminal file link at its line and column and reuses the document'
     await expect(actions).toBeVisible()
     await actions.getByRole('button', { name: 'Open file', exact: true }).click()
     await expect(document).toHaveCount(1)
+    await expect(compactDocument).toBeHidden()
+    await expect(document.locator('.monaco-editor')).toHaveAttribute(
+      'data-link-editor-identity',
+      'preserved',
+    )
     await expect(editor).toBeFocused()
+    await window.keyboard.type('RESTORED_')
+    await window.keyboard.press(process.platform === 'darwin' ? 'Meta+s' : 'Control+s')
+    await expect
+      .poll(async () => (await readFile(filePath, 'utf8')).split('\n')[11])
+      .toBe('linRESTORED_LINK_INSERT_e-12-content')
     await testInfo.attach(`terminal-file-link-document-${browserName}`, {
       body: await window.screenshot(),
       contentType: 'image/png',

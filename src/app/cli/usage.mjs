@@ -4,6 +4,31 @@ export function printUsage() {
   process.stdout.write(`OpenCove CLI (dev)\n\n`)
   process.stdout.write(`Usage:\n`)
   process.stdout.write(`  opencove ping [--pretty] [--endpoint <url>] [--token <token>]\n`)
+  process.stdout.write(`  opencove plugin guide [--pretty]\n`)
+  process.stdout.write(`  opencove plugin list [--pretty]\n`)
+  process.stdout.write(`  opencove plugin install <directory> [--pretty]\n`)
+  process.stdout.write(
+    `  opencove plugin install-git <repository> [--ref <ref>] [--directory <path>] [--build none|npm|pnpm] [--script <name>] [--output <path>]\n`,
+  )
+  process.stdout.write(`  opencove plugin source <id> | check <id> | update <id> [--ref <ref>]\n`)
+  process.stdout.write(`  opencove plugin apply <candidate-id> | rollback <id> <revision>\n`)
+  process.stdout.write(`  opencove plugin discover [--query <text>]\n`)
+  process.stdout.write(`  opencove plugin details <id> [--pretty]\n`)
+  process.stdout.write(
+    `  opencove plugin run <id> <command> [--params <json>] [--node <id>] [--view <id>] [--project <id>] [--pretty]\n`,
+  )
+  process.stdout.write(
+    `  opencove plugin open <id> [--node <id>] [--project <id>] [--space <id>] [--pretty]\n`,
+  )
+  process.stdout.write(`  opencove plugin windows <id> [--project <id>] [--pretty]\n`)
+  process.stdout.write(`  opencove plugin skill <id> <skill> [--pretty]\n`)
+  process.stdout.write(
+    `  New plugin windows always require --project; use project list to find IDs.\n`,
+  )
+  process.stdout.write(`  opencove plugin reload <id> [--pretty]\n`)
+  process.stdout.write(`  opencove plugin enable <id> [--pretty]\n`)
+  process.stdout.write(`  opencove plugin disable <id> [--pretty]\n`)
+  process.stdout.write(`  opencove plugin uninstall <id> [--pretty]\n`)
   process.stdout.write(`  opencove endpoint list [--pretty]\n`)
   process.stdout.write(
     `  opencove endpoint register --hostname <host> --port <port> --remote-token <token> [--display-name <name>] [--pretty]\n`,

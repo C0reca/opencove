@@ -1,36 +1,62 @@
 import React from 'react'
-import { ArrowRight, ChevronRight, Group, Tag, X } from 'lucide-react'
+import { ArrowRight, ChevronRight, Scan, Tag, X } from 'lucide-react'
 import { useTranslation } from '@app/renderer/i18n'
+import { menuHoverHandler } from '@app/renderer/components/menuHoverHandler'
+import { useFilesystemNodesActions } from '../FilesystemNodesContext'
+import { FilesystemPathMenuItems } from './FilesystemPathMenuItems'
 
 export function WorkspaceContextSelectionMenuContent({
   createSpaceFromSelectedNodes,
   openLabelColorSubmenu,
   labelColorButtonRef,
+  isLabelColorSubmenuOpen,
   canConvertSelectedNoteToTask,
   isConvertSelectedNoteToTaskDisabled,
   convertSelectedNoteToTask,
   clearNodeSelection,
   closeContextMenu,
+  closeWindow,
+  nodeId,
 }: {
   createSpaceFromSelectedNodes: () => void
   openLabelColorSubmenu: () => void
   labelColorButtonRef: React.RefObject<HTMLButtonElement | null>
+  isLabelColorSubmenuOpen: boolean
   canConvertSelectedNoteToTask: boolean
   isConvertSelectedNoteToTaskDisabled: boolean
   convertSelectedNoteToTask: () => void
   clearNodeSelection: () => void
   closeContextMenu: () => void
+  closeWindow?: () => void
+  nodeId?: string
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const filesystem = useFilesystemNodesActions()
+  const hasPath = nodeId && filesystem?.getNodePathUri?.(nodeId)
+  const copyPath = (relative: boolean) => {
+    closeContextMenu()
+    if (nodeId) {
+      void filesystem?.copyNodePath?.(nodeId, relative)
+    }
+  }
 
   return (
     <>
+      {hasPath ? (
+        <>
+          <FilesystemPathMenuItems
+            onCopyRelativePath={() => copyPath(true)}
+            onCopyAbsolutePath={() => copyPath(false)}
+          />
+          <div className="workspace-context-menu__separator" />
+        </>
+      ) : null}
       <button
         type="button"
         data-testid="workspace-selection-create-space"
         onClick={createSpaceFromSelectedNodes}
       >
-        <Group className="workspace-context-menu__icon" aria-hidden="true" />
+        <Scan className="workspace-context-menu__icon" aria-hidden="true" />
         <span className="workspace-context-menu__label">
           {t('workspaceContextMenu.createSpaceWithSelected')}
         </span>
@@ -52,8 +78,9 @@ export function WorkspaceContextSelectionMenuContent({
         ref={labelColorButtonRef}
         type="button"
         data-testid="workspace-selection-label-color"
-        onMouseEnter={openLabelColorSubmenu}
-        onFocus={openLabelColorSubmenu}
+        aria-haspopup="menu"
+        aria-expanded={isLabelColorSubmenuOpen}
+        onMouseEnter={menuHoverHandler(openLabelColorSubmenu)}
         onClick={openLabelColorSubmenu}
       >
         <Tag className="workspace-context-menu__icon" aria-hidden="true" />
@@ -76,6 +103,23 @@ export function WorkspaceContextSelectionMenuContent({
           {t('workspaceContextMenu.clearSelection')}
         </span>
       </button>
+      {closeWindow ? (
+        <>
+          <div className="workspace-context-menu__separator" />
+          <button
+            type="button"
+            data-testid="workspace-node-close"
+            className="workspace-context-menu__item--danger"
+            onClick={() => {
+              closeContextMenu()
+              closeWindow()
+            }}
+          >
+            <X className="workspace-context-menu__icon" aria-hidden="true" />
+            <span className="workspace-context-menu__label">{t('common.close')}</span>
+          </button>
+        </>
+      ) : null}
     </>
   )
 }

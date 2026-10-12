@@ -120,8 +120,12 @@ describe('terminal link action boundary', () => {
   })
   it('keeps terminal focus until keyboard navigation enters the menu and restores it on Escape', () => {
     render(<TerminalLinkHost containerRef={{ current: container }} sessionId="one" options={{}} />)
+    const input = document.createElement('textarea')
+    container.append(input)
+    input.focus()
     const link = intent({ action: 'menu' })
     dispatch(link)
+    expect(input).toHaveFocus()
     expect(screen.getByRole('button', { name: /Open (file|in browser)/ })).not.toHaveFocus()
     fireEvent.keyDown(document, { key: 'Tab' })
     expect(screen.getByRole('button', { name: /Open (file|in browser)/ })).toHaveFocus()

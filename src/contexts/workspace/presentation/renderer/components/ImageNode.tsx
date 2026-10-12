@@ -4,6 +4,8 @@ import { useTranslation } from '@app/renderer/i18n'
 import type { CanvasImageMimeType } from '@shared/contracts/dto'
 import type { NodeFrame, Point } from '../types'
 import { NodeResizeHandles } from './shared/NodeResizeHandles'
+import { NodeKindIcon } from './shared/NodeKindIcon'
+import { WindowCollapseButton } from './shared/WindowCollapseButton'
 import { useNodeFrameResize } from '../utils/nodeFrameResize'
 import { resolveCanonicalNodeMinSize } from '../utils/workspaceNodeSizing'
 
@@ -136,6 +138,8 @@ export function ImageNode({
   return (
     <div
       className="image-node"
+      data-cove-part="window"
+      data-cove-kind="image"
       style={style}
       data-node-drag-handle="true"
       onClickCapture={event => {
@@ -161,6 +165,11 @@ export function ImageNode({
         />
       )}
 
+      <span className="cove-node-kind-badge" aria-hidden="true">
+        <NodeKindIcon kind="image" />
+      </span>
+
+      <WindowCollapseButton onClose={onClose} />
       <button
         type="button"
         className="image-node__close nodrag"

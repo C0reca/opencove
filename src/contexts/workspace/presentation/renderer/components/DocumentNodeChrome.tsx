@@ -6,13 +6,15 @@ import { DocumentNodeBody } from './DocumentNodeBody'
 import type { DocumentNodeInteractionOptions } from './DocumentNode.helpers'
 import type { DocumentNodeUnsupportedKind, LoadedDocumentMediaSource } from './DocumentNode.shared'
 import { NodeResizeHandles } from './shared/NodeResizeHandles'
+import { NodeKindIcon } from './shared/NodeKindIcon'
+import { WindowCollapseButton } from './shared/WindowCollapseButton'
 import { shouldStopWheelPropagation } from './taskNode/helpers'
 import { suppressExplorerOverlayInteractions } from './workspaceCanvas/explorerInteractionGuard'
 
 export interface DocumentNodeChromeProps extends DocumentNavigationProps {
   title: string
   uri: string
-  mountId: string | null
+  mountId: string | null | undefined
   displayPath: string
   labelColor?: LabelColor | null
   style: CSSProperties
@@ -84,6 +86,8 @@ export function DocumentNodeChrome({
   return (
     <div
       className="document-node nowheel"
+      data-cove-part="window"
+      data-cove-kind="document"
       style={style}
       onClickCapture={event => {
         if (event.button !== 0 || !(event.target instanceof Element)) {
@@ -114,7 +118,11 @@ export function DocumentNodeChrome({
         }
       }}
     >
-      <div className="document-node__header" data-node-drag-handle="true">
+      <div
+        className="document-node__header"
+        data-cove-part="window-header"
+        data-node-drag-handle="true"
+      >
         {labelColor ? (
           <span
             className="cove-label-dot cove-label-dot--solid"
@@ -122,8 +130,10 @@ export function DocumentNodeChrome({
             aria-hidden="true"
           />
         ) : null}
+        <NodeKindIcon kind="document" filePath={uri} />
         <span
           className="document-node__title"
+          data-cove-part="window-title"
           data-testid="document-node-title"
           title={displayPath}
         >
@@ -174,6 +184,7 @@ export function DocumentNodeChrome({
             </button>
           ) : null}
 
+          <WindowCollapseButton onClose={onRequestClose} revealBeforeClose={isDirty} />
           <button
             type="button"
             className="document-node__close nodrag"

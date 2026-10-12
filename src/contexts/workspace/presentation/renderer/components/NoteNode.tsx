@@ -11,6 +11,8 @@ import { resolveCanonicalNodeMinSize } from '../utils/workspaceNodeSizing'
 import { normalizeMarkdownFileName } from './NoteNode.markdown'
 import { InlineNodeTitleEditor } from './shared/InlineNodeTitleEditor'
 import { NoteNodeActionsMenu } from './NoteNodeActionsMenu'
+import { NodeKindIcon } from './shared/NodeKindIcon'
+import { WindowCollapseButton } from './shared/WindowCollapseButton'
 
 interface NoteNodeInteractionOptions {
   normalizeViewport?: boolean
@@ -125,6 +127,8 @@ export function NoteNode({
   return (
     <div
       className="note-node nowheel"
+      data-cove-part="window"
+      data-cove-kind="note"
       style={style}
       onClickCapture={event => {
         if (event.button !== 0) {
@@ -165,7 +169,11 @@ export function NoteNode({
         }
       }}
     >
-      <div className="note-node__header" data-node-drag-handle="true">
+      <div
+        className="note-node__header"
+        data-cove-part="window-header"
+        data-node-drag-handle="true"
+      >
         {labelColor ? (
           <span
             className="cove-label-dot cove-label-dot--solid"
@@ -173,6 +181,7 @@ export function NoteNode({
             aria-hidden="true"
           />
         ) : null}
+        <NodeKindIcon kind="note" />
         <InlineNodeTitleEditor
           value={resolvedTitle}
           placeholder={t('noteNode.untitledTitle')}
@@ -196,6 +205,7 @@ export function NoteNode({
           onConvertToTask={onConvertToTask}
           onSetLabelColorOverride={onSetLabelColorOverride}
         />
+        <WindowCollapseButton onClose={onClose} />
         <button
           type="button"
           className="note-node__close nodrag"
@@ -211,6 +221,7 @@ export function NoteNode({
       </div>
 
       <textarea
+        data-cove-part="window-body"
         className="note-node__textarea nodrag nowheel"
         data-testid="note-node-textarea"
         value={text}

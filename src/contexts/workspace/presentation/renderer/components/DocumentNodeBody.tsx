@@ -27,7 +27,7 @@ export function DocumentNodeBody({
   onMediaError,
 }: DocumentNavigationProps & {
   uri: string
-  mountId: string | null
+  mountId: string | null | undefined
   isLoading: boolean
   loadError: string | null
   mediaLoadError: boolean
@@ -51,7 +51,7 @@ export function DocumentNodeBody({
   }, [isLoading, loadError, mediaSource, navigation, onNavigationApplied, unsupportedKind, uri])
 
   return (
-    <div className="document-node__body">
+    <div className="document-node__body" data-cove-part="window-body">
       {isLoading ? (
         <div className="document-node__state">{t('common.loading')}</div>
       ) : loadError ? (

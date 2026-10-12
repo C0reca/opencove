@@ -21,8 +21,10 @@ async function expectPersistedDisclosure(window: Page, collapsed: boolean): Prom
       }
     })
     .toEqual({
-      projects: collapsed ? { 'project-a': true } : {},
-      spaces: collapsed ? { 'project-a:space-0': true } : {},
+      projects: { 'project-a': true },
+      spaces: collapsed
+        ? { 'project-a:project-root': true, 'project-a:project-a-space': true }
+        : { 'project-a:project-root': true },
     })
 }
 
@@ -34,7 +36,7 @@ async function quitApp(electronApp: ElectronApplication): Promise<void> {
   await expect.poll(() => appProcess.exitCode !== null || appProcess.signalCode !== null).toBe(true)
 }
 
-test('restores project and Space group disclosure after two cold restarts', async ({
+test('restores Space disclosure and keeps root agents visible after two cold restarts', async ({
   browserName: _,
 }, testInfo) => {
   const userDataDir = await createTestUserDataDir()
@@ -45,43 +47,61 @@ test('restores project and Space group disclosure after two cold restarts', asyn
     let window = launched.window
     await seedWorkspaceState(window, {
       activeWorkspaceId: 'project-a',
-      settings: { standardWindowSizeBucket: 'regular' },
-      workspaces: ['project-a', 'project-b'].map((id, index) => ({
+      settings: {
+        standardWindowSizeBucket: 'regular',
+        sidebarCollapsedWorkspaceIds: { 'project-a': true },
+        sidebarCollapsedSpaceGroupIds: { 'project-a:project-root': true },
+      },
+      workspaces: ['project-a', 'project-b'].map(id => ({
         id,
         name: id,
         path: testWorkspacePath,
-        nodes: [
-          {
-            ...createRailAgent(
-              `${id}-agent`,
-              `${id} agent`,
-              400,
-              'Test',
-              '2026-01-01T00:00:00.000Z',
-            ),
-            status: 'stopped' as const,
-          },
-        ],
+        nodes: ['root', 'space'].map((group, index) => ({
+          ...createRailAgent(
+            `${id}-${group}-agent`,
+            `${id} ${group} agent`,
+            400 * index,
+            'Test',
+            '2026-01-01T00:00:00.000Z',
+          ),
+          status: 'stopped' as const,
+        })),
         spaces: [
           {
-            id: `space-${index}`,
-            name: `Space ${index}`,
+            id: `${id}-space`,
+            name: 'Shared Space',
             directoryPath: testWorkspacePath,
-            nodeIds: [`${id}-agent`],
+            nodeIds: [`${id}-space-agent`],
             rect: null,
           },
         ],
       })),
     })
-    const projectToggle = (id: string) => window.getByTestId(`workspace-item-toggle-${id}`)
-    const spaceToggle = () =>
-      window.getByTestId('workspace-space-item-project-a-space-0').locator('button[aria-expanded]')
-    await expect(spaceToggle()).toHaveAttribute('aria-expanded', 'true')
-    await spaceToggle().click()
-    await expect(spaceToggle()).toHaveAttribute('aria-expanded', 'false')
-    await projectToggle('project-a').click()
-    await expect(projectToggle('project-a')).toHaveAttribute('aria-expanded', 'false')
-    await expect(projectToggle('project-b')).toHaveAttribute('aria-expanded', 'true')
+    const toggle = (id: string) => window.getByTestId(`workspace-space-toggle-${id}-${id}-space`)
+    const expectGroups = async (id: string, expanded: boolean): Promise<void> => {
+      await Promise.all([
+        expect(toggle(id)).toHaveAttribute('aria-expanded', String(expanded)),
+        expect(window.getByTestId(`workspace-agent-item-${id}-${id}-space-agent`)).toHaveCount(
+          expanded ? 1 : 0,
+        ),
+        expect(window.getByTestId(`workspace-agent-item-${id}-${id}-root-agent`)).toHaveCount(1),
+        expect(window.getByTestId(`workspace-space-toggle-${id}-project-root`)).toHaveCount(0),
+      ])
+    }
+    const selectProject = async (id: string): Promise<void> => {
+      await window.getByTestId(`workspace-item-${id}`).click()
+      await expect(window.getByTestId(`workspace-item-${id}`)).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
+    }
+    await expectGroups('project-a', true)
+    await toggle('project-a').click()
+    await expectGroups('project-a', false)
+    await selectProject('project-b')
+    await expectGroups('project-b', true)
+    await selectProject('project-a')
+    await expectGroups('project-a', false)
 
     await expectPersistedDisclosure(window, true)
     await quitApp(app)
@@ -89,19 +109,17 @@ test('restores project and Space group disclosure after two cold restarts', asyn
     launched = await launchApp({ userDataDir, cleanupUserDataDir: false })
     app = launched.electronApp
     window = launched.window
-    await expect(projectToggle('project-a')).toHaveAttribute('aria-expanded', 'false')
-    await expect(projectToggle('project-b')).toHaveAttribute('aria-expanded', 'true')
-    await projectToggle('project-a').click()
-    await expect(spaceToggle()).toHaveAttribute('aria-expanded', 'false')
-    await expect(window.getByTestId('workspace-agent-item-project-a-project-a-agent')).toHaveCount(
-      0,
-    )
-    await testInfo.attach('restored-project-and-space-disclosure', {
+    await expectGroups('project-a', false)
+    await selectProject('project-b')
+    await expectGroups('project-b', true)
+    await selectProject('project-a')
+    await expectGroups('project-a', false)
+    await testInfo.attach('restored-space-disclosure-with-visible-root-agents', {
       body: await window.screenshot(),
       contentType: 'image/png',
     })
-    await spaceToggle().click()
-    await expect(spaceToggle()).toHaveAttribute('aria-expanded', 'true')
+    await toggle('project-a').click()
+    await expectGroups('project-a', true)
 
     await expectPersistedDisclosure(window, false)
     await quitApp(app)
@@ -109,8 +127,10 @@ test('restores project and Space group disclosure after two cold restarts', asyn
     launched = await launchApp({ userDataDir, cleanupUserDataDir: false })
     app = launched.electronApp
     window = launched.window
-    await expect(projectToggle('project-a')).toHaveAttribute('aria-expanded', 'true')
-    await expect(spaceToggle()).toHaveAttribute('aria-expanded', 'true')
+    await expectGroups('project-a', true)
+    await selectProject('project-b')
+    await expectGroups('project-b', true)
+    await expectPersistedDisclosure(window, false)
   } finally {
     await app?.close().catch(() => undefined)
     await removePathWithRetry(userDataDir)

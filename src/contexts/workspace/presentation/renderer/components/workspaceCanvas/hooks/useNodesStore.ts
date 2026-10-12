@@ -17,6 +17,8 @@ import { ensureNodesHaveInitialDimensions } from '../../../utils/reactFlowNodeDi
 import { removeNodeWithRelations } from './useNodesStore.closeNode'
 import { resolveWorkspaceLayoutAfterNodeResize } from './useNodesStore.resolveResizeLayout'
 import { useWorkspaceCanvasNodeCreation } from './useNodesStore.createNodes'
+import { useCreatedNodePublisher } from './useCreatedNodePublisher'
+import { publishWorkspaceNodesClosed } from '../nodeClosureEvents'
 import { useWorkspaceCanvasNoteNodeMutations } from './useNodesStore.noteMutations'
 import { useWorkspaceCanvasRoleNodeMutations } from './useNodesStore.roleMutations'
 import { useWorkspaceCanvasWebsiteNodeMutations } from './useNodesStore.websiteMutations'
@@ -27,8 +29,11 @@ import type {
 } from './useNodesStore.types'
 import { persistNodeScrollback } from './useNodesStore.scrollbackPersistence'
 import { useTerminalAgentOverlayMutations } from './useNodesStore.terminalAgentOverlay'
+import { getPluginManifest } from '@contexts/plugins/presentation/renderer/usePluginRegistry'
 
 export function useWorkspaceCanvasNodesStore({
+  workspaceId,
+  workspacePath,
   nodes,
   spacesRef,
   onNodesChange,
@@ -154,7 +159,11 @@ export function useWorkspaceCanvasNodesStore({
       clearAgentLaunchToken(nodeId)
 
       const target = nodesRef.current.find(node => node.id === nodeId)
-      if (target && target.data.sessionId.length > 0) {
+      if (
+        target &&
+        (target.data.kind === 'terminal' || target.data.kind === 'agent') &&
+        target.data.sessionId.length > 0
+      ) {
         cleanupNodeRuntimeArtifacts(nodeId, target.data.sessionId)
         void window.opencoveApi.pty
           .kill({ sessionId: target.data.sessionId })
@@ -176,15 +185,24 @@ export function useWorkspaceCanvasNodesStore({
         useWebsiteWindowStore.getState().clearNode(nodeId)
       }
 
+      let closedNodeIds: string[] = []
       setNodes(prevNodes => {
         const now = new Date().toISOString()
-        return removeNodeWithRelations({
+        const nextNodes = removeNodeWithRelations({
           prevNodes,
           nodeId,
           target,
           now,
         })
+        if (
+          prevNodes.some(node => node.id === nodeId) &&
+          !nextNodes.some(node => node.id === nodeId)
+        ) {
+          closedNodeIds = [nodeId]
+        }
+        return nextNodes
       })
+      publishWorkspaceNodesClosed(closedNodeIds)
 
       onRequestPersistFlush?.()
     },
@@ -202,8 +220,13 @@ export function useWorkspaceCanvasNodesStore({
         return
       }
 
-      const minSize =
-        node.data.kind === 'agent'
+      const pluginView =
+        node.data.kind === 'plugin' && node.data.plugin
+          ? getPluginManifest(node.data.plugin.pluginId)?.view
+          : undefined
+      const minSize = pluginView
+        ? { width: pluginView.minWidth, height: pluginView.minHeight }
+        : node.data.kind === 'agent'
           ? resolveAgentNodeMinSize(node.data.agent?.provider)
           : resolveCanonicalNodeMinSize(node.data.kind)
       const resolveDimension = (value: number, fallback: number): number =>
@@ -387,6 +410,7 @@ export function useWorkspaceCanvasNodesStore({
     [onRequestPersistFlush, setNodes],
   )
 
+  const publishCreatedNodes = useCreatedNodePublisher(setNodes)
   const {
     createNodeForSession,
     createNoteNode,
@@ -394,14 +418,18 @@ export function useWorkspaceCanvasNodesStore({
     createRoleNode,
     createImageNode,
     createDocumentNode,
+    createFolderNode,
     createWebsiteNode,
+    createPluginNode,
   } = useWorkspaceCanvasNodeCreation({
+    workspaceId,
+    workspacePath,
     nodesRef,
     spacesRef,
     onRequestPersistFlush,
     onShowMessage,
     onNodeCreated: onNodeCreated ?? fallbackOnNodeCreated,
-    setNodes,
+    setNodes: publishCreatedNodes,
     standardWindowSizeBucket,
     browserDefaultMode,
   })
@@ -440,6 +468,8 @@ export function useWorkspaceCanvasNodesStore({
     appendRoleRunRecord,
     createImageNode,
     createDocumentNode,
+    createFolderNode,
     createWebsiteNode,
+    createPluginNode,
   }
 }

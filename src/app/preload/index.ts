@@ -113,6 +113,7 @@ import type {
   CliPathStatusResult,
 } from '../../shared/contracts/dto'
 import { invokeIpc } from './ipcInvoke'
+import { resolveDroppedFile } from './filesystemDrop'
 import { onApplicationShortcut } from './applicationShortcutApi'
 import { createIssueReportPreloadApi } from './issueReportApi'
 import { resolveOpenCoveMeta } from './opencoveMeta'
@@ -147,6 +148,8 @@ const opencoveApi = {
   performanceDiagnostics: createPerformanceDiagnosticsPreloadApi(),
   issueReport: createIssueReportPreloadApi(),
   controlSurface: {
+    resolvePluginResourceUrl: (resourcePath: string): Promise<string> =>
+      invokeIpc(IPC_CHANNELS.controlSurfacePluginResourceUrl, resourcePath),
     invoke: async <TValue>(request: ControlSurfaceInvokeRequest): Promise<TValue> =>
       invokeIpc(IPC_CHANNELS.controlSurfaceInvoke, request),
   },
@@ -166,6 +169,7 @@ const opencoveApi = {
   },
   filesystem: {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+    resolveDroppedFile,
     createDirectory: (payload: CreateDirectoryInput): Promise<void> =>
       invokeIpc(IPC_CHANNELS.filesystemCreateDirectory, payload),
     copyEntry: (payload: CopyEntryInput): Promise<void> =>

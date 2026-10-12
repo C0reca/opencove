@@ -102,6 +102,16 @@ function SystemOpenAction({ uri, mountId }: SystemFileReference): JSX.Element | 
   )
 }
 
-export function DocumentNodeSystemOpen(props: SystemFileReference): JSX.Element {
-  return <SystemOpenAction key={JSON.stringify([props.uri, props.mountId])} {...props} />
+export function DocumentNodeSystemOpen({
+  uri,
+  mountId,
+}: {
+  uri: string
+  mountId: string | null | undefined
+}): JSX.Element | null {
+  // An unresolved remote binding is not the explicit local (null) source.
+  if (mountId === undefined) {
+    return null
+  }
+  return <SystemOpenAction key={JSON.stringify([uri, mountId])} uri={uri} mountId={mountId} />
 }

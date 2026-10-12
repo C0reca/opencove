@@ -12,11 +12,13 @@ import type {
 import type { AgentExecutablePathOverrideByProvider } from './agentSettings.executables'
 import type { AgentProvider, TaskTitleAgentProvider } from './agentSettings.providers'
 import type { BrowserSearchEngineId } from './browserSettings'
+import type { SidebarViewSettings } from './sidebarViewSettings'
 import type {
   ViewportTransition,
   CanvasInputMode,
   CanvasWheelBehavior,
   CanvasWheelZoomModifier,
+  NodeExpandBehavior,
   StandardWindowSizeBucket,
 } from './canvasSettings'
 import type { AgentEnvByProvider } from './agentEnv'
@@ -28,16 +30,27 @@ import type { QuickPhrase } from './quickPhrases'
 import type { TaskPromptTemplate, TaskPromptTemplatesByWorkspaceId } from './taskPromptTemplates'
 import type { TerminalDisplayReference } from './terminalDisplayCalibration'
 import type { UiLanguage, UiTheme } from './uiSettings'
+import type { PluginContributionPreferences } from './pluginSettings'
 
 export type TaskTitleProvider = 'default' | TaskTitleAgentProvider
 export type TerminalProfileId = string | null
 
-export interface AgentSettings {
+export interface PixelEffectSettings {
+  canvasPixelBackgroundEnabled: boolean
+  nodeCreationPixelEffectEnabled: boolean
+  nodeClosePixelEffectEnabled: boolean
+  agentWorkingPixelEffectEnabled: boolean
+}
+
+export interface AgentSettings extends PixelEffectSettings {
   language: UiLanguage
   uiTheme: UiTheme
+  disabledPluginIds: string[]
+  pluginContributions: PluginContributionPreferences
   isPrimarySidebarCollapsed: boolean
   sidebarCollapsedWorkspaceIds: Record<string, boolean>
   sidebarCollapsedSpaceGroupIds: Record<string, boolean>
+  sidebarView: SidebarViewSettings
   workspaceSearchPanelWidth: number
   defaultProvider: AgentProvider
   agentProviderOrder: AgentProvider[]
@@ -72,11 +85,13 @@ export interface AgentSettings {
   canvasWheelBehavior: CanvasWheelBehavior
   canvasWheelZoomModifier: CanvasWheelZoomModifier
   standardWindowSizeBucket: StandardWindowSizeBucket
+  nodeExpandBehavior: NodeExpandBehavior
   preserveWindowSizesOnArrange: boolean
   websiteWindowPolicy: WebsiteWindowPolicy
   browserDefaultMode: BrowserMode
   browserSearchEngine: BrowserSearchEngineId
   experimentalWebsiteWindowPasteEnabled: boolean
+  /** @deprecated Retained for saved profiles; remote connections are always available. */
   experimentalRemoteWorkersEnabled: boolean
   defaultTerminalWindowScalePercent: number
   terminalFontSize: number

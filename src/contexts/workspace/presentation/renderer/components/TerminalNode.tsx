@@ -155,11 +155,7 @@ export function TerminalNode({
     toggleCaseSensitive: toggleFindCaseSensitive,
     toggleUseRegex: toggleFindUseRegex,
     bindSearchAddon: bindSearchAddonToFind,
-  } = useTerminalFind({
-    sessionId,
-    terminalRef,
-    terminalThemeMode,
-  })
+  } = useTerminalFind({ sessionId, terminalRef, terminalThemeMode })
 
   if (rendererRecoveryStateRef.current.sessionId !== sessionId) {
     rendererRecoveryStateRef.current = { sessionId, preferredMode: 'auto', resetVersion: 0 }
@@ -458,6 +454,7 @@ export function TerminalNode({
       title={title}
       fixedTitlePrefix={fixedTitlePrefix}
       kind={isAgentPresentation ? 'agent' : kind}
+      agentProvider={terminalProvider}
       labelColor={labelColor}
       agentExecutionDirectory={agentExecutionDirectory}
       agentResumeSessionId={agentResumeSessionId}

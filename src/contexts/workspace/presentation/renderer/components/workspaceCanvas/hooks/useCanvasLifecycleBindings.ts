@@ -1,10 +1,11 @@
 import type { Edge, Node, ReactFlowInstance, Viewport } from '@xyflow/react'
 import type { AgentSettings } from '@contexts/settings/domain/agentSettings'
-import type { TerminalNodeData, WorkspaceSpaceState } from '../../../types'
+import type { TerminalNodeData } from '../../../types'
 import type { WorkspaceCanvasActionRefs } from './useActionRefs'
 import { useWorkspaceCanvasLifecycle } from './useLifecycle'
 import { useWorkspaceCanvasState } from './useCanvasState'
 import { useWorkspaceCanvasViewportNavigation } from './useViewportNavigation'
+import { useWorkspaceCanvasCreationActivation } from './useCreationActivation'
 
 export function useWorkspaceCanvasLifecycleBindings({
   workspaceId,
@@ -16,8 +17,9 @@ export function useWorkspaceCanvasLifecycleBindings({
   agentSettings,
   focusSpaceId,
   focusNodeId,
+  focusNodeInput,
   focusSequence,
-  spaces,
+  expandNode,
   focusSpaceInViewport,
   nodes,
   isFocusNodeTargetZoomPreviewing,
@@ -33,25 +35,28 @@ export function useWorkspaceCanvasLifecycleBindings({
   agentSettings: Pick<AgentSettings, 'canvasInputMode' | 'focusNodeTargetZoom'>
   focusSpaceId?: string | null
   focusNodeId?: string | null
+  focusNodeInput?: boolean
   focusSequence?: number
-  spaces: WorkspaceSpaceState[]
+  expandNode: (id: string) => Node<TerminalNodeData> | undefined
   focusSpaceInViewport: (spaceId: string) => boolean
   nodes: Node<TerminalNodeData>[]
   isFocusNodeTargetZoomPreviewing: boolean
   nodesRef: React.MutableRefObject<Node<TerminalNodeData>[]>
   requestNodeDeleteRef: WorkspaceCanvasActionRefs['requestNodeDeleteRef']
 }): void {
+  useWorkspaceCanvasCreationActivation({ workspaceId, canvasRef: canvasState.canvasRef, nodesRef })
   useWorkspaceCanvasViewportNavigation({
     workspaceId,
     persistedViewport: viewport,
     restoredViewportWorkspaceIdRef: canvasState.restoredViewportWorkspaceIdRef,
     reactFlow,
     focusNodeId,
+    focusNodeInput,
     focusSpaceId,
     focusSequence,
     nodes,
     nodesRef,
-    spaces,
+    expandNode,
     focusSpaceInViewport,
     focusNodeTargetZoom: agentSettings.focusNodeTargetZoom,
   })

@@ -1,5 +1,7 @@
 import { useCallback, useState, type JSX, type PointerEvent } from 'react'
 import { useTranslation } from '@app/renderer/i18n'
+import { AgentProviderIcon } from '@app/renderer/components/AgentProviderIcon'
+import type { AgentProvider } from '@contexts/settings/domain/agentSettings'
 import type { AgentSessionSummary } from '@shared/contracts/dto'
 import { Copy, LoaderCircle } from 'lucide-react'
 import type { AgentRuntimeStatus, WorkspaceNodeKind } from '../../types'
@@ -7,11 +9,14 @@ import type { LabelColor } from '@shared/types/labelColor'
 import { TerminalNodeAgentSessionActions } from './TerminalNodeAgentSessionActions'
 import { getStatusClassName } from './status'
 import { InlineNodeTitleEditor } from '../shared/InlineNodeTitleEditor'
+import { NodeKindIcon } from '../shared/NodeKindIcon'
+import { WindowCollapseButton } from '../shared/WindowCollapseButton'
 
 interface TerminalNodeHeaderProps {
   title: string
   fixedTitlePrefix?: string | null
   kind: WorkspaceNodeKind
+  agentProvider?: AgentProvider | null
   status: AgentRuntimeStatus | null
   agentStateDegraded?: boolean
   labelColor?: LabelColor | null
@@ -32,6 +37,7 @@ export function TerminalNodeHeader({
   title,
   fixedTitlePrefix = null,
   kind,
+  agentProvider,
   status,
   agentStateDegraded = false,
   labelColor,
@@ -100,6 +106,7 @@ export function TerminalNodeHeader({
   return (
     <div
       className="terminal-node__header"
+      data-cove-part="window-header"
       data-node-drag-handle="true"
       onPointerDownCapture={onHeaderPointerDownCapture}
     >
@@ -110,6 +117,11 @@ export function TerminalNodeHeader({
           aria-hidden="true"
         />
       ) : null}
+      {isAgentNode && agentProvider ? (
+        <AgentProviderIcon provider={agentProvider} className="cove-node-provider-icon" />
+      ) : (
+        <NodeKindIcon kind={kind} />
+      )}
       {isTitleEditable ? (
         <InlineNodeTitleEditor
           value={editableTitle}
@@ -122,7 +134,9 @@ export function TerminalNodeHeader({
           onCommit={commitTitleEdit}
         />
       ) : (
-        <span className="terminal-node__title">{title}</span>
+        <span className="terminal-node__title" data-cove-part="window-title">
+          {title}
+        </span>
       )}
       <div
         className="terminal-node__header-drag-surface"
@@ -209,6 +223,7 @@ export function TerminalNodeHeader({
         </button>
       ) : null}
 
+      <WindowCollapseButton onClose={onClose} />
       <button
         type="button"
         className="terminal-node__close nodrag"

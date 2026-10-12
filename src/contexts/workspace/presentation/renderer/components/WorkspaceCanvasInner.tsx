@@ -3,8 +3,10 @@ import * as workspaceCanvasHooks from './workspaceCanvas/hooks'
 import { TerminalDisplayAlignedWorkspaceCanvasView } from './workspaceCanvas/TerminalDisplayAlignedWorkspaceCanvasView'
 import { openQuickMenuSettings } from './workspaceCanvas/openQuickMenuSettings'
 import type { WorkspaceCanvasInnerProps } from './workspaceCanvas/types'
-import { WorkspaceDocumentNavigationContext } from './workspaceCanvas/WorkspaceDocumentNavigationContext'
-import { useWorkspaceDocumentNavigation } from './workspaceCanvas/hooks/useWorkspaceDocumentNavigation'
+import { useCanvasCollapse } from './workspaceCanvas/collapse/useCanvasCollapse'
+import { WorkspaceCanvasProviders } from './workspaceCanvas/WorkspaceCanvasProviders'
+import { useCanvasSpaceExplorer } from './workspaceCanvas/hooks/useCanvasSpaceExplorer'
+import { useWorkspaceCanvasActionBar } from './workspaceCanvas/hooks/useCanvasActionBarActions'
 export function WorkspaceCanvasInner({
   workspaceId,
   onShowMessage,
@@ -31,6 +33,7 @@ export function WorkspaceCanvasInner({
   onChangePreserveWindowSizesOnArrange,
   isFocusNodeTargetZoomPreviewing = false,
   focusNodeId,
+  focusNodeInput,
   focusSpaceId,
   focusSequence,
 }: WorkspaceCanvasInnerProps) {
@@ -42,19 +45,19 @@ export function WorkspaceCanvasInner({
     viewport,
     persistedMinimapVisible,
   })
-  const { publishLiveNodesChange, commitNodesChange } =
-    workspaceCanvasHooks.useWorkspaceCanvasNodePublishers({
-      setCanvasNodes: canvasState.setCanvasNodes,
-      hasTransientNodePositionsRef: canvasState.hasTransientNodePositionsRef,
-      onNodesChange,
-    })
+  const nodePublishers = workspaceCanvasHooks.useWorkspaceCanvasNodePublishers({
+    ...canvasState,
+    onNodesChange,
+  })
   // prettier-ignore
-  const exclusiveNodeDragAnchorIdRef = workspaceCanvasHooks.useWorkspaceCanvasWorkspaceReset(workspaceId)
+  const exclusiveNodeDragAnchorIdRef = workspaceCanvasHooks.useWorkspaceCanvasWorkspaceReset(workspaceId, canvasState.selectedNodeIds.length)
   const actionRefs = workspaceCanvasHooks.useWorkspaceCanvasActionRefs()
   const nodeStore = workspaceCanvasHooks.useWorkspaceCanvasNodesStore({
+    workspaceId,
+    workspacePath,
     nodes: canvasState.flowNodes,
     spacesRef: canvasState.spacesRef,
-    onNodesChange: commitNodesChange,
+    onNodesChange: nodePublishers.commitNodesChange,
     onSpacesChange,
     onRequestPersistFlush,
     onShowMessage,
@@ -123,6 +126,7 @@ export function WorkspaceCanvasInner({
     cancelSpaceWorktreeMismatchDropWarning,
     continueSpaceWorktreeMismatchDropWarning,
   } = workspaceCanvasHooks.useWorkspaceCanvasSpaceOwnership({
+    workspaceId,
     workspacePath,
     reactFlow,
     spacesRef: canvasState.spacesRef,
@@ -158,24 +162,7 @@ export function WorkspaceCanvasInner({
     standardWindowSizeBucket: agentSettings.standardWindowSizeBucket,
     terminalDisplayMetrics,
   })
-  const {
-    taskTagOptions,
-    taskCreator,
-    setTaskCreator,
-    openTaskCreator,
-    closeTaskCreator,
-    generateTaskTitle,
-    createTask,
-    taskEditor,
-    setTaskEditor,
-    closeTaskEditor,
-    generateTaskEditorTitle,
-    saveTaskEdits,
-    nodeDeleteConfirmation,
-    setNodeDeleteConfirmation,
-    confirmNodeDelete,
-    requestNodeClose,
-  } = workspaceCanvasHooks.useWorkspaceCanvasTaskUi({
+  const taskUi = workspaceCanvasHooks.useWorkspaceCanvasTaskUi({
     agentTaskTagOptions: agentSettings.taskTagOptions,
     contextMenu: canvasState.contextMenu,
     setContextMenu: canvasState.setContextMenu,
@@ -202,7 +189,9 @@ export function WorkspaceCanvasInner({
   // prettier-ignore
   const inputMode = workspaceCanvasHooks.useWorkspaceCanvasInputMode({ canvasInputModeSetting: agentSettings.canvasInputMode, canvasWheelBehaviorSetting: agentSettings.canvasWheelBehavior, canvasWheelZoomModifierSetting: agentSettings.canvasWheelZoomModifier, detectedCanvasInputMode: canvasState.detectedCanvasInputMode, inputModalityStateRef: canvasState.inputModalityStateRef, setDetectedCanvasInputMode: canvasState.setDetectedCanvasInputMode, canvasRef: canvasState.canvasRef, trackpadGestureLockRef: canvasState.trackpadGestureLockRef, setIsCanvasWheelGestureCaptureActive: canvasState.setIsCanvasWheelGestureCaptureActive, viewportRef: canvasState.viewportRef, reactFlow, onViewportChange })
   // prettier-ignore
-  workspaceCanvasHooks.useWorkspaceCanvasLifecycleBindings({ workspaceId, persistedMinimapVisible, canvasState, cancelSpaceRename: spacesApi.cancelSpaceRename, reactFlow, viewport, agentSettings, focusSpaceId, focusNodeId, focusSequence, spaces, focusSpaceInViewport: spacesApi.focusSpaceInViewport, nodes: canvasState.flowNodes, isFocusNodeTargetZoomPreviewing, nodesRef: nodeStore.nodesRef, requestNodeDeleteRef: actionRefs.requestNodeDeleteRef })
+  const collapse = useCanvasCollapse({ workspaceId, canvasRef: canvasState.canvasRef, nodes: canvasState.flowNodes, spaces, nodesRef: nodeStore.nodesRef, spacesRef: canvasState.spacesRef, setNodes: nodeStore.setNodes, onSpacesChange, reactFlow, focusNodeTargetZoom: agentSettings.focusNodeTargetZoom, nodeExpandBehavior: agentSettings.nodeExpandBehavior, onRequestPersistFlush })
+  // prettier-ignore
+  workspaceCanvasHooks.useWorkspaceCanvasLifecycleBindings({ workspaceId, persistedMinimapVisible, canvasState, cancelSpaceRename: spacesApi.cancelSpaceRename, reactFlow, viewport, agentSettings, focusSpaceId, focusNodeId, focusNodeInput, focusSequence, expandNode: collapse.expandNode, focusSpaceInViewport: spacesApi.focusSpaceInViewport, nodes: canvasState.flowNodes, isFocusNodeTargetZoomPreviewing, nodesRef: nodeStore.nodesRef, requestNodeDeleteRef: actionRefs.requestNodeDeleteRef })
   // prettier-ignore
   const { canConvertSelectedNoteToTask, isConvertSelectedNoteToTaskDisabled, convertSelectedNoteToTask, convertNoteToTask, arrangeAll, arrangeCanvas, arrangeInSpace } = workspaceCanvasHooks.useWorkspaceCanvasMenuActions({ selectedNodeIds: canvasState.selectedNodeIds, selectedNodeIdsRef: canvasState.selectedNodeIdsRef, flowNodes: canvasState.flowNodes, nodesRef: nodeStore.nodesRef, setNodes: nodeStore.setNodes, onRequestPersistFlush, onShowMessage, setContextMenu: canvasState.setContextMenu, reactFlow, spacesRef: canvasState.spacesRef, onSpacesChange, standardWindowSizeBucket: agentSettings.standardWindowSizeBucket, focusNodeTargetZoom: agentSettings.focusNodeTargetZoom })
   const nodeTypes = workspaceCanvasHooks.useWorkspaceCanvasComposedNodeTypes({
@@ -225,13 +214,15 @@ export function WorkspaceCanvasInner({
     handleSelectionContextMenu,
     handleNodeContextMenu,
     handlePaneContextMenu,
-    handleSelectionChange,
     handleCanvasPointerDownCapture,
     handleCanvasPointerMoveCapture,
     handleCanvasPointerUpCapture,
     handleCanvasDoubleClickCapture,
     handlePaneClick,
     createTerminalNode,
+    createTerminalNodeAtFlowPoint,
+    createNoteNodeAtFlowPoint,
+    createWebsiteNodeAtFlowPoint,
     createNoteNodeFromContextMenu,
     createWebsiteNodeFromContextMenu,
     runQuickCommand,
@@ -276,45 +267,74 @@ export function WorkspaceCanvasInner({
     createImageNode: nodeStore.createImageNode,
     createWebsiteNode: nodeStore.createWebsiteNode,
   })
-  // prettier-ignore
-  workspaceCanvasHooks.useWorkspaceCanvasShortcutActions({ closeNode: requestNodeClose, enabled: shortcutsEnabled, workspaceId, activeSpaceId, spaces, agentSettings, workspacePath, environmentVariables, canvasRef: canvasState.canvasRef, setContextMenu: canvasState.setContextMenu, setEmptySelectionPrompt: canvasState.setEmptySelectionPrompt, cancelSpaceRename: spacesApi.cancelSpaceRename, reactFlow, spacesRef: canvasState.spacesRef, spaceNavigationAnchorIdRef: canvasState.spaceNavigationAnchorIdRef, nodesRef: nodeStore.nodesRef, setNodes: nodeStore.setNodes, setSelectedNodeIds: canvasState.setSelectedNodeIds, setSelectedSpaceIds: canvasState.setSelectedSpaceIds, selectedNodeIdsRef: canvasState.selectedNodeIdsRef, selectedSpaceIdsRef: canvasState.selectedSpaceIdsRef, onSpacesChange, createNodeForSession: nodeStore.createNodeForSession, createNoteNode: nodeStore.createNoteNode, createSpaceFromSelectedNodes: spacesApi.createSpaceFromSelectedNodes, activateSpace: spacesApi.activateSpace, setActiveSpaceIdFromNodeNavigation: spacesApi.setActiveSpaceIdFromNodeNavigation, clearNodeSelection, onShowMessage, terminalDisplayMetrics })
-  workspaceCanvasHooks.useWorkspaceCanvasRuntimeBindings({
-    setNodes: nodeStore.setNodes,
-    onRequestPersistFlush,
-    actionRefs,
-    clearNodeSelection,
-    closeNode: requestNodeClose,
-    resizeNode: nodeStore.resizeNode,
-    noteMutations: nodeStore,
-    updateWebsiteUrl: nodeStore.updateWebsiteUrl,
-    setWebsitePinned: nodeStore.setWebsitePinned,
-    setWebsiteSession: nodeStore.setWebsiteSession,
-    setWebsiteMode: nodeStore.setWebsiteMode,
-    setWebsiteFullscreen: nodeStore.setWebsiteFullscreen,
-    updateNodeScrollback: nodeStore.updateNodeScrollback,
-    updateTerminalTitle: nodeStore.updateTerminalTitle,
-    clearTerminalAgentOverlay: nodeStore.clearTerminalAgentOverlay,
-    renameTerminalTitle: nodeStore.renameTerminalTitle,
-    reloadAgentSession: agentSupport.reloadAgentNode,
-    listAgentSessions: agentSupport.listAgentSessionsForNode,
-    switchAgentSession: agentSupport.switchAgentNodeSession,
-    focusNodeOnClick: agentSettings.focusNodeOnClick,
-    focusNodeTargetZoom: agentSettings.focusNodeTargetZoom,
-    nodesRef: nodeStore.nodesRef,
+  const actionBarActions = useWorkspaceCanvasActionBar({
+    canvasRef: canvasState.canvasRef,
     reactFlow,
-    onShowMessage,
+    createAgentAtPoint: agentSupport.launchAgentAtFlowPosition,
+    createTerminalAtPoint: createTerminalNodeAtFlowPoint,
+    createNoteAtPoint: createNoteNodeAtFlowPoint,
+    createTaskAtPoint: taskUi.createTaskAtPoint,
+    createWebsiteAtPoint: createWebsiteNodeAtFlowPoint,
+    createSpaceAtPoint: spacesApi.createEmptySpaceAtPoint,
+    createPluginAtPoint: (anchor, pluginId) => {
+      nodeStore.createPluginNode(anchor, pluginId)
+    },
+    setContextMenu: canvasState.setContextMenu,
+    setEmptySelectionPrompt: canvasState.setEmptySelectionPrompt,
+    cancelSpaceRename: spacesApi.cancelSpaceRename,
+    spacesRef: canvasState.spacesRef,
   })
-  const applyChanges = workspaceCanvasHooks.useWorkspaceCanvasApplyNodeChanges({
+  const createPluginNodeFromContextMenu = workspaceCanvasHooks.useWorkspaceCanvasPluginEntry({
+    contextMenu: canvasState.contextMenu,
+    setContextMenu: canvasState.setContextMenu,
+    createPluginNode: nodeStore.createPluginNode,
+  })
+  workspaceCanvasHooks.useWorkspaceCanvasShortcutActions({
+    closeNode: taskUi.requestNodeClose,
+    enabled: shortcutsEnabled,
+    workspaceId,
+    activeSpaceId,
+    spaces,
+    agentSettings,
+    workspacePath,
+    environmentVariables,
+    canvasRef: canvasState.canvasRef,
+    setContextMenu: canvasState.setContextMenu,
+    setEmptySelectionPrompt: canvasState.setEmptySelectionPrompt,
+    cancelSpaceRename: spacesApi.cancelSpaceRename,
+    reactFlow,
+    spacesRef: canvasState.spacesRef,
+    spaceNavigationAnchorIdRef: canvasState.spaceNavigationAnchorIdRef,
     nodesRef: nodeStore.nodesRef,
-    onNodesChange: publishLiveNodesChange,
-    onNodesCommit: commitNodesChange,
-    clearAgentLaunchToken: nodeStore.clearAgentLaunchToken,
-    normalizePosition: nodeStore.normalizePosition,
-    applyPendingScrollbacks: nodeStore.applyPendingScrollbacks,
-    isNodeDraggingRef: nodeStore.isNodeDraggingRef,
-    dragSelectedSpaceIdsRef: canvasState.dragSelectedSpaceIdsRef,
-    exclusiveNodeDragAnchorIdRef,
+    setNodes: nodeStore.setNodes,
+    setSelectedNodeIds: canvasState.setSelectedNodeIds,
+    setSelectedSpaceIds: canvasState.setSelectedSpaceIds,
+    selectedNodeIdsRef: canvasState.selectedNodeIdsRef,
+    selectedSpaceIdsRef: canvasState.selectedSpaceIdsRef,
+    onSpacesChange,
+    nodeCreation: nodeStore,
+    createSpaceFromSelectedNodes: spacesApi.createSpaceFromSelectedNodes,
+    launchAgentAtFlowPosition: agentSupport.launchAgentAtFlowPosition,
+    activateSpace: spacesApi.activateSpace,
+    setActiveSpaceIdFromNodeNavigation: spacesApi.setActiveSpaceIdFromNodeNavigation,
+    clearNodeSelection,
+    onShowMessage,
+    terminalDisplayMetrics,
+  })
+  const applyChanges = workspaceCanvasHooks.useWorkspaceCanvasRuntimeIntegrations({
+    actionRefs,
+    nodeStore,
+    taskUi,
+    agentSupport,
+    agentSettings,
+    reactFlow,
+    clearNodeSelection,
+    onRequestPersistFlush,
+    onShowMessage,
+    canvasState,
+    nodePublishers,
     nodeDragSession,
+    exclusiveNodeDragAnchorIdRef,
   })
   const {
     taskTitleProviderLabel,
@@ -339,36 +359,25 @@ export function WorkspaceCanvasInner({
     handleNodeContextMenu,
     handleSelectionContextMenu,
   })
-  const spaceExplorer = workspaceCanvasHooks.useWorkspaceCanvasSpaceExplorer({
-    canvasRef: canvasState.canvasRef,
-    spaces,
-    spacesRef: canvasState.spacesRef,
-    nodesRef: nodeStore.nodesRef,
-    setNodes: nodeStore.setNodes,
-    onSpacesChange,
-    onRequestPersistFlush,
-    reactFlow,
-    nodeDragSession,
-    finalizeDraggedNodeDrop,
-    createDocumentNode: nodeStore.createDocumentNode,
-    createImageNode: nodeStore.createImageNode,
-    standardWindowSizeBucket: agentSettings.standardWindowSizeBucket,
-  })
-  const documentNavigation = useWorkspaceDocumentNavigation({
-    workspaceId,
-    spacesRef: canvasState.spacesRef,
-    nodesRef: nodeStore.nodesRef,
-    setNodes: nodeStore.setNodes,
-    onSpacesChange,
-    onRequestPersistFlush,
-    reactFlow,
-    createDocumentNode: nodeStore.createDocumentNode,
-    openSpaceExplorer: spaceExplorer.openSpaceExplorer,
-    openExplorerSpaceId: spaceExplorer.openExplorerSpaceId,
-  })
+  // prettier-ignore
+  const spaceExplorer = useCanvasSpaceExplorer({ workspaceId, canvasState, nodeStore, spaces, onSpacesChange, onRequestPersistFlush, reactFlow, nodeDragSession, finalizeDraggedNodeDrop, agentSettings, expandNode: collapse.expandNode })
   return (
-    <WorkspaceDocumentNavigationContext.Provider value={documentNavigation}>
+    <WorkspaceCanvasProviders
+      collapse={collapse}
+      openSpaceExplorer={spaceExplorer.openSpaceExplorer}
+      openExplorerSpaceId={spaceExplorer.openExplorerSpaceId}
+      workspaceId={workspaceId}
+      workspacePath={workspacePath}
+      nodeStore={nodeStore}
+      spacesRef={canvasState.spacesRef}
+      onSpacesChange={onSpacesChange}
+      onRequestPersistFlush={onRequestPersistFlush}
+      onShowMessage={onShowMessage}
+      setContextMenu={canvasState.setContextMenu}
+      closeOtherMenus={spaceUi.closeSpaceActionMenu}
+    >
       <TerminalDisplayAlignedWorkspaceCanvasView
+        workspaceId={workspaceId}
         terminalFontSize={agentSettings.terminalFontSize}
         terminalFontFamily={agentSettings.terminalFontFamily}
         terminalDisplayCalibration={terminalDisplayCalibration}
@@ -385,12 +394,12 @@ export function WorkspaceCanvasInner({
         handleCanvasPaste={handleCanvasPaste}
         handleCanvasDragOver={handleCanvasDragOver}
         handleCanvasDrop={handleCanvasDrop}
+        {...actionBarActions}
         nodes={canvasState.flowNodes}
         edges={taskAgentEdges}
         nodeTypes={nodeTypes}
         onNodesChange={applyChanges}
         onNodeClick={handleNodeClick}
-        onSelectionChange={handleSelectionChange}
         onNodeDragStart={handleNodeDragStart}
         onSelectionDragStart={handleSelectionDragStart}
         onNodeDragStop={handleNodeDragStop}
@@ -429,10 +438,11 @@ export function WorkspaceCanvasInner({
         createTerminalNode={createTerminalNode}
         createNoteNodeFromContextMenu={createNoteNodeFromContextMenu}
         createWebsiteNodeFromContextMenu={createWebsiteNodeFromContextMenu}
+        createPluginNodeFromContextMenu={createPluginNodeFromContextMenu}
         arrangeAll={arrangeAll}
         arrangeCanvas={arrangeCanvas}
         arrangeInSpace={arrangeInSpace}
-        openTaskCreator={openTaskCreator}
+        openTaskCreator={taskUi.openTaskCreator}
         openAgentLauncher={agentSupport.openAgentLauncher}
         openAgentLauncherForProvider={agentSupport.openAgentLauncherForProvider}
         runQuickCommand={runQuickCommand}
@@ -452,22 +462,22 @@ export function WorkspaceCanvasInner({
         setSelectedNodeLabelColorOverride={override =>
           nodeStore.setNodeLabelColorOverride(canvasState.selectedNodeIds, override)
         }
-        taskCreator={taskCreator}
+        taskCreator={taskUi.taskCreator}
         taskTitleProviderLabel={taskTitleProviderLabel}
         taskTitleModelLabel={taskTitleModelLabel}
-        taskTagOptions={taskTagOptions}
-        setTaskCreator={setTaskCreator}
-        closeTaskCreator={closeTaskCreator}
-        generateTaskTitle={generateTaskTitle}
-        createTask={createTask}
-        taskEditor={taskEditor}
-        setTaskEditor={setTaskEditor}
-        closeTaskEditor={closeTaskEditor}
-        generateTaskEditorTitle={generateTaskEditorTitle}
-        saveTaskEdits={saveTaskEdits}
-        nodeDeleteConfirmation={nodeDeleteConfirmation}
-        setNodeDeleteConfirmation={setNodeDeleteConfirmation}
-        confirmNodeDelete={confirmNodeDelete}
+        taskTagOptions={taskUi.taskTagOptions}
+        setTaskCreator={taskUi.setTaskCreator}
+        closeTaskCreator={taskUi.closeTaskCreator}
+        generateTaskTitle={taskUi.generateTaskTitle}
+        createTask={taskUi.createTask}
+        taskEditor={taskUi.taskEditor}
+        setTaskEditor={taskUi.setTaskEditor}
+        closeTaskEditor={taskUi.closeTaskEditor}
+        generateTaskEditorTitle={taskUi.generateTaskEditorTitle}
+        saveTaskEdits={taskUi.saveTaskEdits}
+        nodeDeleteConfirmation={taskUi.nodeDeleteConfirmation}
+        setNodeDeleteConfirmation={taskUi.setNodeDeleteConfirmation}
+        confirmNodeDelete={taskUi.confirmNodeDelete}
         spaceWorktreeMismatchDropWarning={spaceWorktreeMismatchDropWarning}
         cancelSpaceWorktreeMismatchDropWarning={cancelSpaceWorktreeMismatchDropWarning}
         continueSpaceWorktreeMismatchDropWarning={continueSpaceWorktreeMismatchDropWarning}
@@ -482,6 +492,6 @@ export function WorkspaceCanvasInner({
         closeNodesById={closeNodesById}
         {...roleUiProps}
       />
-    </WorkspaceDocumentNavigationContext.Provider>
+    </WorkspaceCanvasProviders>
   )
 }

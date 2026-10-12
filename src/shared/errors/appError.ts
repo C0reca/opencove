@@ -1,9 +1,11 @@
+import { fileSystemErrorReasonMessage } from './filesystemError'
 import type { AppErrorCode, AppErrorDescriptor, AppErrorParams } from '../contracts/dto'
 import type { IpcInvokeResult } from '../contracts/ipc'
 
 function createMessageMap(): Record<AppErrorCode, string> {
   return {
     'common.invalid_input': 'The request was invalid.',
+    'plugin.operation_failed': 'Plugin operation failed.',
     'common.approved_path_required': 'The selected path is outside approved workspaces.',
     'common.unavailable': 'This feature is unavailable.',
     'common.unexpected': 'Something went wrong. Please try again.',
@@ -191,7 +193,18 @@ export function toAppErrorDescriptor(
 
 export function formatAppErrorMessage(error: AppErrorDescriptor | OpenCoveAppError): string {
   const descriptor = error instanceof OpenCoveAppError ? error.toDescriptor() : error
-  return APP_ERROR_MESSAGES[descriptor.code] ?? APP_ERROR_MESSAGES['common.unexpected']
+  const message = APP_ERROR_MESSAGES[descriptor.code] ?? APP_ERROR_MESSAGES['common.unexpected']
+  if (descriptor.code.startsWith('filesystem.')) {
+    const reason = fileSystemErrorReasonMessage(descriptor.params?.reason)
+    return reason ? `${message} ${reason}` : message
+  }
+  if (
+    descriptor.code === 'plugin.operation_failed' &&
+    typeof descriptor.params?.reason === 'string'
+  ) {
+    return `${message} ${descriptor.params.reason.slice(0, 2000)}`
+  }
+  return message
 }
 
 export function getAppErrorDebugMessage(

@@ -9,7 +9,7 @@ Document Node 持久化的是：
 - 文件 `uri`
 - 节点标题和窗口 frame
 - 必要的显示偏好
-- 当前 mount context（由所属 Space 的 `targetMountId` 提供）
+- 创建时的 `workerBinding`（来源 endpoint/mount）。旧节点无此字段时才兼容使用所属 Space 的 `targetMountId`。
 
 不应持久化为文件内容真相的状态：
 
@@ -59,9 +59,10 @@ Document Node 持久化的是：
 
 Space Explorer 是 Document Node 的主要入口：
 
-- 点击文本文件创建或聚焦 Document Node。
-- 点击媒体文件显示预览或创建媒体窗口。Explorer 现有支持格式的图片导入仍创建附件副本；URI 文档预览与附件导入是不同语义。
-- 节点读写必须保持在触发它的 mount scope 内。
+- 单击文件预览，双击创建或聚焦 Document Node；从文件浏览器拖到画布背景也可创建文件节点。
+- 点击媒体文件显示预览或创建媒体窗口。Explorer 支持格式的图片导入仍创建附件副本；URI 文档预览与附件导入是不同语义。
+- 节点读写必须保持在触发它的 mount scope 内；移入/移出其他 Space 仅改变布局归属，不改变源文件位置。
+- Folder Node 使用相同的浏览与文件操作能力，导航和图标/列表视图见 [Filesystem](./FILESYSTEM.md)。
 
 ## Terminal Navigation
 
@@ -72,7 +73,7 @@ Space Explorer 是 Document Node 的主要入口：
 - 无 mount 的本机终端可以在 workspace root 打开文件；文件复用同时检查 URI、Space 和 mount。
 - 行列范围是每个 canvas 内的 transient navigation intent。Monaco ready 后应用、聚焦并消费；旧请求不能消费新请求，关闭文档或切换 workspace 后不得应用迟到请求。
 - 链接跳转不能替换已有文档草稿，不能持久化 selection/cursor，也不能改变终端的启动目录或恢复意图。
-- 目录链接可以把匹配 Space 的 Explorer 临时定位到该目录；关闭 Explorer 后清除临时位置。目前 workspace root 没有独立目录浏览窗口。
+- 目录链接可以把匹配 Space 的 Explorer 临时定位到其浏览根目录范围内的子目录；底部路径仍保留可返回父级的根目录范围，关闭 Explorer 后清除临时位置。独立 Folder Node 可以放在根画布或 Space 中，保留各自来源与导航范围。
 
 ## UI Constraints
 

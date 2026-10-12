@@ -13,6 +13,7 @@ type SetNodes = (
 ) => void
 
 export function useWorkspaceCanvasTaskWindows({
+  workspaceId,
   taskTagOptions,
   contextMenu,
   setContextMenu,
@@ -27,6 +28,7 @@ export function useWorkspaceCanvasTaskWindows({
   closeNode,
   actionRefs,
 }: {
+  workspaceId?: string
   taskTagOptions: string[]
   contextMenu: ContextMenuState | null
   setContextMenu: React.Dispatch<React.SetStateAction<ContextMenuState | null>>
@@ -54,11 +56,13 @@ export function useWorkspaceCanvasTaskWindows({
   const {
     taskCreator,
     setTaskCreator,
+    createTaskAtPoint,
     openTaskCreator,
     closeTaskCreator,
     generateTaskTitle,
     createTask,
   } = useWorkspaceCanvasTaskCreator({
+    workspaceId,
     contextMenu,
     setContextMenu,
     taskTagOptions,
@@ -94,6 +98,7 @@ export function useWorkspaceCanvasTaskWindows({
   return {
     taskCreator,
     setTaskCreator,
+    createTaskAtPoint,
     openTaskCreator,
     closeTaskCreator,
     generateTaskTitle,

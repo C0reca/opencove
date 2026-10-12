@@ -23,6 +23,7 @@ type SetNodes = (
 ) => void
 
 interface UseTaskCreatorParams {
+  workspaceId?: string
   contextMenu: ContextMenuState | null
   setContextMenu: React.Dispatch<React.SetStateAction<ContextMenuState | null>>
   taskTagOptions: string[]
@@ -47,6 +48,7 @@ interface UseTaskCreatorParams {
 }
 
 export function useWorkspaceCanvasTaskCreator({
+  workspaceId,
   contextMenu,
   setContextMenu,
   taskTagOptions,
@@ -61,6 +63,7 @@ export function useWorkspaceCanvasTaskCreator({
 }: UseTaskCreatorParams): {
   taskCreator: TaskCreatorState | null
   setTaskCreator: React.Dispatch<React.SetStateAction<TaskCreatorState | null>>
+  createTaskAtPoint: (anchor: Point) => void
   openTaskCreator: () => void
   closeTaskCreator: () => void
   generateTaskTitle: () => Promise<void>
@@ -86,25 +89,63 @@ export function useWorkspaceCanvasTaskCreator({
     [t],
   )
 
+  const createTaskAtAnchor = useCallback(
+    (anchor: Point): void => {
+      const placementAnchor = resolveNodePlacementAnchorFromViewportCenter(
+        anchor,
+        resolveDefaultTaskWindowSize(standardWindowSizeBucket),
+      )
+      const targetSpace = findContainingSpaceByAnchor(spacesRef.current, anchor) ?? null
+      const created = createTaskNode(
+        placementAnchor,
+        t('taskWindow.defaultTaskTitle'),
+        '',
+        false,
+        'medium',
+        [],
+        { targetSpaceRect: targetSpace?.rect ?? null },
+      )
+
+      if (!created) {
+        return
+      }
+
+      if (targetSpace) {
+        assignNodeToSpaceAndExpand({
+          workspaceId,
+          createdNodeId: created.id,
+          createdNode: created,
+          targetSpaceId: targetSpace.id,
+          spacesRef,
+          nodesRef,
+          setNodes,
+          onSpacesChange,
+        })
+      }
+
+      onRequestPersistFlush?.()
+    },
+    [
+      workspaceId,
+      createTaskNode,
+      nodesRef,
+      onRequestPersistFlush,
+      onSpacesChange,
+      setNodes,
+      spacesRef,
+      standardWindowSizeBucket,
+      t,
+    ],
+  )
+
   const openTaskCreator = useCallback(() => {
     if (!contextMenu || contextMenu.kind !== 'pane') {
       return
     }
 
-    setTaskCreator({
-      anchor: resolvePaneNodeCreationAnchor(contextMenu),
-      title: '',
-      requirement: '',
-      priority: 'medium',
-      selectedTags: [],
-      autoGenerateTitle: isTaskAiNamingEnabled,
-      isGeneratingTitle: false,
-      isCreating: false,
-      error: null,
-    })
-
+    createTaskAtAnchor(resolvePaneNodeCreationAnchor(contextMenu))
     setContextMenu(null)
-  }, [contextMenu, isTaskAiNamingEnabled, setContextMenu])
+  }, [contextMenu, createTaskAtAnchor, setContextMenu])
 
   const closeTaskCreator = useCallback(() => {
     setTaskCreator(prev => {
@@ -250,6 +291,7 @@ export function useWorkspaceCanvasTaskCreator({
       }
       if (targetSpace) {
         assignNodeToSpaceAndExpand({
+          workspaceId,
           createdNodeId: created.id,
           createdNode: created,
           targetSpaceId: targetSpace.id,
@@ -403,6 +445,7 @@ export function useWorkspaceCanvasTaskCreator({
       )
     }
   }, [
+    workspaceId,
     createTaskNode,
     fallbackTaskTitle,
     nodesRef,
@@ -421,6 +464,7 @@ export function useWorkspaceCanvasTaskCreator({
   return {
     taskCreator,
     setTaskCreator,
+    createTaskAtPoint: createTaskAtAnchor,
     openTaskCreator,
     closeTaskCreator,
     generateTaskTitle,

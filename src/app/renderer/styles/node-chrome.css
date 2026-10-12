@@ -1,13 +1,15 @@
 :is(
   .terminal-node,
+  .cove-canvas-node-window,
   .task-node,
   .role-node,
   .note-node,
   .document-node,
+  .folder-node,
   .website-node,
   .image-node
 ) {
-  border-radius: var(--cove-radius-lg);
+  border-radius: var(--cove-node-radius);
   box-shadow: var(--cove-node-shadow);
   transition:
     border-color var(--cove-motion-fast) var(--cove-ease-standard),
@@ -15,7 +17,43 @@
 }
 
 :is(
+  .terminal-node,
+  .cove-canvas-node-window,
+  .task-node,
+  .role-node,
+  .note-node,
+  .document-node,
+  .folder-node,
+  .website-node
+) {
+  background-image: var(--cove-node-background-image);
+}
+
+.workspace-canvas
+  :is(
+    .terminal-node__title,
+    .cove-canvas-node-window__title,
+    .task-node__title,
+    .note-node__title,
+    .document-node__title,
+    .role-node__title,
+    .node-title-editor,
+    .node-title-editor__input,
+    .website-node__address-input
+  ) {
+  font-weight: 500;
+}
+
+.workspace-canvas .react-flow__node.selected :is(.role-node, .document-node, .folder-node),
+.workspace-canvas :is(.role-node, .document-node, .folder-node):focus-within,
+.workspace-canvas :is(.role-node, .document-node, .folder-node)[data-cove-focus-transition='true'] {
+  border-color: var(--cove-node-selection-border);
+  box-shadow: var(--cove-node-shadow-focus, var(--cove-node-selection-shadow));
+}
+
+:is(
   .terminal-node__header,
+  .cove-canvas-node-window__header,
   .task-node__header,
   .role-node__header,
   .note-node__header,
@@ -23,12 +61,14 @@
   .website-node__header,
   .image-node__header
 ) {
-  height: 34px;
-  padding-inline: 9px;
+  height: var(--cove-node-header-height);
+  flex-shrink: 0;
+  padding-inline: var(--cove-node-header-padding-inline);
 }
 
 :is(
   .terminal-node__action--icon,
+  .cove-canvas-node-window__action,
   .terminal-node__close,
   .task-node__icon-button,
   .role-node__icon-button,
@@ -45,6 +85,7 @@
 
 :is(
     .terminal-node__action--icon,
+    .cove-canvas-node-window__action,
     .terminal-node__close,
     .task-node__icon-button,
     .role-node__icon-button,
@@ -62,10 +103,12 @@
 @media (prefers-reduced-motion: reduce) {
   :is(
     .terminal-node,
+    .cove-canvas-node-window,
     .task-node,
     .role-node,
     .note-node,
     .document-node,
+    .folder-node,
     .website-node,
     .image-node
   ) {

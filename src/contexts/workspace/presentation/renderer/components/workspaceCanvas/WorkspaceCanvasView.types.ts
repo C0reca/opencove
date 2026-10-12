@@ -33,6 +33,7 @@ import type {
   WorkspaceCanvasProps,
 } from './types'
 import type { SpaceExplorerClipboardItem } from './view/WorkspaceSpaceExplorerOverlay.operations'
+import type { WorkspaceCanvasActionKind } from './view/WorkspaceCanvasActionBar'
 
 export type SelectionDraftUiState = Pick<
   SelectionDraftState,
@@ -40,6 +41,7 @@ export type SelectionDraftUiState = Pick<
 >
 
 export interface WorkspaceCanvasViewProps {
+  workspaceId: string
   canvasRef: React.RefObject<HTMLDivElement | null>
   resolvedCanvasInputMode: string
   isCanvasWheelGestureCaptureActive: boolean
@@ -52,6 +54,14 @@ export interface WorkspaceCanvasViewProps {
   handleCanvasPaste?: React.ClipboardEventHandler<HTMLDivElement>
   handleCanvasDragOver?: React.DragEventHandler<HTMLDivElement>
   handleCanvasDrop?: React.DragEventHandler<HTMLDivElement>
+  createNodeAtViewportCenter: (kind: WorkspaceCanvasActionKind) => void | Promise<void>
+  createNodeAtPoint: (
+    kind: WorkspaceCanvasActionKind,
+    point: { x: number; y: number },
+  ) => void | Promise<void>
+  createPluginNodeFromContextMenu: (pluginId: string) => void
+  clearActionBarTransientUi: () => void
+  resolveDropTargetLabel: (point: { x: number; y: number }) => string | null
   nodes: Node<TerminalNodeData>[]
   edges: Edge[]
   nodeTypes: NodeTypes
@@ -61,7 +71,6 @@ export interface WorkspaceCanvasViewProps {
   onNodeClick: (event: React.MouseEvent, node: Node<TerminalNodeData>) => void
   onNodeContextMenu: (event: React.MouseEvent, node: Node<TerminalNodeData>) => void
   onSelectionContextMenu: (event: React.MouseEvent, selectedNodes: Node<TerminalNodeData>[]) => void
-  onSelectionChange: (params: { nodes: Node<TerminalNodeData>[] }) => void
   onNodeDragStart: (
     event: React.MouseEvent,
     node: Node<TerminalNodeData>,

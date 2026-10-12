@@ -7,6 +7,7 @@ import * as systemFontsHook from '../../../src/app/renderer/shell/hooks/useSyste
 import { DEFAULT_AGENT_SETTINGS } from '../../../src/contexts/settings/domain/agentSettings'
 import { createAppError } from '../../../src/shared/errors/appError'
 import { AgentProviderConfigurePanel } from '../../../src/contexts/settings/presentation/renderer/settingsPanel/AgentProviderConfigurePanel'
+import { TerminalAppearanceSection } from '../../../src/contexts/settings/presentation/renderer/settingsPanel/TerminalAppearanceSection'
 import { AppearanceSection } from '../../../src/contexts/settings/presentation/renderer/settingsPanel/AppearanceSection'
 import { CanvasSection } from '../../../src/contexts/settings/presentation/renderer/settingsPanel/CanvasSection'
 import { ExperimentalSection } from '../../../src/contexts/settings/presentation/renderer/settingsPanel/ExperimentalSection'
@@ -128,25 +129,36 @@ describe('Settings form accessible names', () => {
 
   it('names appearance inputs, theme selection, and terminal font controls', () => {
     render(
-      <AppearanceSection
-        uiTheme="system"
-        uiFontSize={16}
-        terminalFontSize={14}
-        terminalFontFamily={null}
-        terminalDisplayAutoReferenceEnabled
-        terminalDisplayCalibrationCompensationEnabled
-        terminalDisplayReference={null}
-        onChangeUiTheme={noop}
-        onChangeUiFontSize={noop}
-        onChangeTerminalFontSize={noop}
-        onChangeTerminalFontFamily={noop}
-        onChangeTerminalDisplayAutoReferenceEnabled={noop}
-        onChangeTerminalDisplayCalibrationCompensationEnabled={noop}
-        onChangeTerminalDisplayReference={noop}
-      />,
+      <>
+        <AppearanceSection
+          uiTheme="system"
+          pixelEffects={DEFAULT_AGENT_SETTINGS}
+          onChangePixelEffect={noop}
+          uiFontSize={16}
+          onChangeUiTheme={noop}
+          onChangeUiFontSize={noop}
+        />
+        <TerminalAppearanceSection
+          terminalFontSize={14}
+          terminalFontFamily={null}
+          terminalDisplayAutoReferenceEnabled
+          terminalDisplayCalibrationCompensationEnabled
+          terminalDisplayReference={null}
+          onChangeTerminalFontSize={noop}
+          onChangeTerminalFontFamily={noop}
+          onChangeTerminalDisplayAutoReferenceEnabled={noop}
+          onChangeTerminalDisplayCalibrationCompensationEnabled={noop}
+          onChangeTerminalDisplayReference={noop}
+        />
+      </>,
     )
 
-    expectNamedTestId('settings-ui-theme-trigger', 'Appearance')
+    expectNamedTestId('settings-ui-theme', 'Appearance')
+    expectNamedTestId('settings-ui-theme-system', 'Follow System')
+    expectNamedTestId('settings-ui-theme-pixel-light', 'Pixel Light')
+    expectNamedTestId('settings-node-creation-pixel-effect', 'Node Creation Effect')
+    expectNamedTestId('settings-node-close-pixel-effect', 'Node Closing Effect')
+    expectNamedTestId('settings-canvas-pixel-background', 'Canvas Background Effect')
     expectNamedTestId('settings-ui-font-size', 'Interface Font Size')
     expectNamedTestId('settings-terminal-font-size', 'Terminal Font Size')
     expectNamedTestId('settings-terminal-font-family', 'Terminal Font')
@@ -161,6 +173,7 @@ describe('Settings form accessible names', () => {
         canvasInputMode="trackpad"
         canvasWheelBehavior="pan"
         canvasWheelZoomModifier="primary"
+        viewportTransition="fly"
         focusNodeOnClick
         focusNodeTargetZoom={1}
         focusNodeUseVisibleCanvasCenter
@@ -169,6 +182,7 @@ describe('Settings form accessible names', () => {
         onChangeCanvasInputMode={noop}
         onChangeCanvasWheelBehavior={noop}
         onChangeCanvasWheelZoomModifier={noop}
+        onChangeViewportTransition={noop}
         onChangeFocusNodeOnClick={noop}
         onChangeFocusNodeTargetZoom={noop}
         onChangeFocusNodeUseVisibleCanvasCenter={noop}
@@ -181,6 +195,7 @@ describe('Settings form accessible names', () => {
     expectNamedTestId('settings-canvas-input-mode-trigger', 'Input Mode')
     expectNamedTestId('settings-canvas-wheel-behavior-trigger', 'Mouse Wheel')
     expectNamedTestId('settings-canvas-wheel-zoom-modifier-trigger', 'Zoom Modifier')
+    expectNamedTestId('settings-viewport-transition-trigger', 'Viewport Transition')
     expectNamedTestId('settings-focus-node-target-zoom', 'Target Zoom')
   })
 
@@ -265,23 +280,25 @@ describe('Settings form accessible names', () => {
     ).toBeVisible()
   })
 
-  it('names Worker mode, remote connection, and Web UI security controls', async () => {
+  it('names Web UI security controls and leaves runtime unchanged on mount', async () => {
     installWorkerApi('remote')
     render(
       <>
-        <WorkerSection remoteWorkersEnabled />
+        <WorkerSection />
         <ExperimentalWorkerWebUiSection />
       </>,
     )
 
-    expectNamedTestId('settings-worker-home-mode-trigger', 'Worker Mode')
     expectNamedTestId('settings-experimental-worker-web-ui-port', 'Port')
     expectNamedTestId('settings-experimental-worker-web-ui-password', 'Password')
-    expect(await screen.findByTestId('settings-worker-remote-hostname')).toHaveAccessibleName(
-      'Hostname',
-    )
-    expectNamedTestId('settings-worker-remote-port', 'Port')
-    expectNamedTestId('settings-worker-remote-token', 'Token')
+    await waitFor(() => expect(window.opencoveApi.workerClient.getConfig).toHaveBeenCalled())
+    expect(screen.queryByTestId('settings-worker-home-mode-trigger')).not.toBeInTheDocument()
+    expect(window.opencoveApi.workerClient.setConfig).not.toHaveBeenCalled()
+    expect(window.opencoveApi.workerClient.setWebUiSettings).not.toHaveBeenCalled()
+    expect(window.opencoveApi.workerClient.setWebUiSecurity).not.toHaveBeenCalled()
+    expect(window.opencoveApi.workerClient.relaunch).not.toHaveBeenCalled()
+    expect(window.opencoveApi.worker.start).not.toHaveBeenCalled()
+    expect(window.opencoveApi.worker.stop).not.toHaveBeenCalled()
   })
 
   it('applies Web UI settings without restarting a running Worker', async () => {
@@ -329,7 +346,7 @@ describe('Settings form accessible names', () => {
     expect(await screen.findByText('无法更新 Web 访问设置，原有监听器仍保持可用。')).toBeVisible()
   })
 
-  it('shows degraded restoration and disables Open after a double-bind failure', async () => {
+  it('shows degraded restoration and hides Open after a double-bind failure', async () => {
     installWorkerApi('local')
     const api = window.opencoveApi
     vi.mocked(api.worker.getStatus).mockResolvedValue({
@@ -384,7 +401,8 @@ describe('Settings form accessible names', () => {
     expect(screen.getByTestId('settings-experimental-worker-web-ui-status')).toHaveTextContent(
       'Restoring listener',
     )
-    expect(screen.getByTestId('settings-experimental-worker-web-ui-open')).toBeDisabled()
+    expect(screen.queryByTestId('settings-experimental-worker-web-ui-open')).not.toBeInTheDocument()
+    expect(screen.getByTestId('settings-experimental-worker-web-ui-refresh')).toBeEnabled()
   })
 
   it('names project worktree and environment variable inputs', () => {

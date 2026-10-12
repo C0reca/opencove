@@ -4,7 +4,10 @@ import type { AgentSettings, AgentProvider } from '@contexts/settings/domain/age
 import type { NodeLabelColorOverride } from '@shared/types/labelColor'
 import type { ProjectIconId } from '@shared/types/projectIcon'
 import type { NodeWorkerBinding } from '@shared/types/nodeWorkerBinding'
-import type { PersistedSpaceRect } from '@shared/contracts/persistedAppState'
+import type {
+  PersistedFolderNodeData,
+  PersistedSpaceRect,
+} from '@shared/contracts/persistedAppState'
 import type {
   NormalizedPersistedAppStateContract,
   NormalizedPersistedNodeContract,
@@ -30,6 +33,7 @@ import type {
   WebsiteWindowSessionMode,
   BrowserMode,
 } from '@shared/contracts/dto'
+import type { PluginNodePayload } from '@contexts/plugins/domain/pluginTypes'
 
 export type { AgentRuntimeStatus } from '@contexts/agent/domain/types'
 
@@ -41,7 +45,9 @@ export type WorkspaceNodeKind =
   | 'role'
   | 'image'
   | 'document'
+  | 'folder'
   | 'website'
+  | 'plugin'
 
 export type TaskRuntimeStatus = 'todo' | 'doing' | 'ai_done' | 'done'
 
@@ -167,6 +173,10 @@ export interface DocumentNodeData {
   uri: string
 }
 
+export type FolderNodeData = PersistedFolderNodeData
+
+export type PluginNodeData = PluginNodePayload
+
 export interface WebsiteNodeData {
   url: string
   pinned: boolean
@@ -179,6 +189,8 @@ export interface WebsiteNodeData {
 
 export interface TerminalNodeData {
   [key: string]: unknown
+  /** Derived canvas presentation only. Runtime dimensions remain width/height. */
+  collapsePresentation?: { collapsed: boolean; spaceHidden: boolean }
   sessionId: string
   /** Recovery handoff: old durable ID while preparing, then Worker result awaiting sync ack. */
   runtimeSessionBinding?:
@@ -216,6 +228,8 @@ export interface TerminalNodeData {
   role?: RoleNodeData | null
   image: ImageNodeData | null
   document: DocumentNodeData | null
+  folder?: FolderNodeData | null
+  plugin?: PluginNodeData | null
   website: WebsiteNodeData | null
 }
 
@@ -249,6 +263,8 @@ export type PersistedTerminalNode = Omit<
     | RoleNodeData
     | ImageNodeData
     | DocumentNodeData
+    | FolderNodeData
+    | PluginNodeData
     | WebsiteNodeData
     | null
 }

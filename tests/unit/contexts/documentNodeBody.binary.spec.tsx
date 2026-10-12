@@ -77,6 +77,23 @@ describe('DocumentNode binary file placeholder', () => {
     expect(editor).not.toHaveBeenCalled()
   })
 
+  it.each(['binary', 'imageTooLarge', 'decodeFailure'] as const)(
+    'keeps an unresolved remote binding unavailable in the %s fallback',
+    kind => {
+      render(
+        <DocumentNodeBody
+          {...props}
+          mountId={undefined}
+          unsupportedKind={kind === 'decodeFailure' ? null : kind}
+          mediaLoadError={kind === 'decodeFailure'}
+        />,
+      )
+      expect(screen.queryByTestId('document-node-open-system')).toBeNull()
+      expect(canOpen).not.toHaveBeenCalled()
+      expect(editor).not.toHaveBeenCalled()
+    },
+  )
+
   it('does not claim text formats are unsupported when their contents cannot be decoded', () => {
     render(<DocumentNodeBody {...props} uri="file:///repo/notes.txt" />)
     expect(screen.getByTestId('document-node-file-preview-message')).toHaveTextContent(

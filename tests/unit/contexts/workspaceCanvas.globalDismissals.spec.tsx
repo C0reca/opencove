@@ -8,12 +8,13 @@ vi.mock('@xyflow/react', () => {
   return {
     Background: () => null,
     Controls: () => null,
+    useReactFlow: () => ({ fitView: vi.fn(), fitBounds: vi.fn() }),
     useStoreApi: () => ({
       setState: vi.fn(),
       getState: vi.fn(() => ({})),
       subscribe: vi.fn(),
     }),
-    useStore: (selector: (state: unknown) => unknown) => selector({}),
+    useStore: (selector: (state: unknown) => unknown) => selector({ transform: [0, 0, 1] }),
     ReactFlow: ({ children }: { children?: React.ReactNode }) => (
       <div data-testid="workspace-react-flow">{children}</div>
     ),
@@ -172,7 +173,6 @@ function createBaseProps(
     onNodeClick: () => undefined,
     onNodeContextMenu: () => undefined,
     onSelectionContextMenu: () => undefined,
-    onSelectionChange: () => undefined,
     onNodeDragStart: () => undefined,
     onSelectionDragStart: () => undefined,
     onNodeDragStop: () => undefined,

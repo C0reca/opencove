@@ -1,0 +1,69 @@
+.cove-node-presentation__compact {
+  position: absolute;
+  inset: 0 auto auto 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cove-node-presentation[data-cove-collapsed] > .cove-node-presentation__compact {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.cove-node-presentation__surface {
+  position: absolute;
+  display: none;
+  box-sizing: border-box;
+  background: var(--cove-collapsed-surface);
+  box-shadow: var(--cove-collapsed-shadow);
+  pointer-events: none;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] {
+  overflow: clip;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] > .cove-node-presentation__surface {
+  display: block;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] > .cove-node-presentation__runtime {
+  position: absolute;
+  inset: 0 auto auto 0;
+  visibility: visible;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] > .cove-node-presentation__compact {
+  visibility: visible;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] [data-cove-collapse-anchor] {
+  opacity: 0;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] .cove-collapsed-window__icon {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] .cove-collapsed-window__icon::before {
+  visibility: hidden;
+}
+
+.cove-node-presentation[data-cove-collapse-motion]
+  .cove-collapsed-window__icon
+  :is(svg, img, .agent-provider-icon__monogram) {
+  transform-origin: 0 0;
+  transform-box: border-box;
+  overflow: visible;
+}
+
+.cove-node-presentation[data-cove-collapse-motion] .cove-collapsed-window__title {
+  position: absolute;
+  max-width: none;
+  margin: 0;
+  /* Its slot preserves layout while the text follows one absolute coordinate
+     space. Keep ellipsis active at every frame, including the handoff. */
+  overflow: hidden;
+}

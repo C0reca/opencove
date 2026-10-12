@@ -6,10 +6,10 @@ import {
   Download,
   LoaderCircle,
   Maximize2,
+  PanelLeft,
   Minimize2,
   RotateCcw,
   Search,
-  Settings,
   SlidersHorizontal,
 } from 'lucide-react'
 import { useTranslation } from '@app/renderer/i18n'
@@ -23,8 +23,13 @@ import type {
 import type { AppUpdateState } from '@shared/contracts/dto'
 import { IssueReportDialog } from './IssueReportDialog'
 import { PerformanceMonitorPanel } from './PerformanceMonitorPanel'
+import { IconButton } from '@app/renderer/components/ui/IconButton'
 
 export function AppHeader({
+  showSidebarTrigger = false,
+  isSidebarOpen = false,
+  onToggleSidebar,
+  sidebarTriggerRef,
   activeWorkspaceName,
   activeWorkspacePath,
   isControlCenterOpen,
@@ -46,11 +51,14 @@ export function AppHeader({
   onClosePerformanceMonitor,
   onToggleIssueReport,
   onCloseIssueReport,
-  onOpenSettings,
   onCheckForUpdates,
   onDownloadUpdate,
   onInstallUpdate,
 }: {
+  showSidebarTrigger?: boolean
+  isSidebarOpen?: boolean
+  onToggleSidebar?: () => void
+  sidebarTriggerRef?: React.Ref<HTMLButtonElement>
   activeWorkspaceName: string | null
   activeWorkspacePath: string | null
   isControlCenterOpen: boolean
@@ -72,7 +80,6 @@ export function AppHeader({
   onClosePerformanceMonitor: () => void
   onToggleIssueReport: () => void
   onCloseIssueReport: () => void
-  onOpenSettings: () => void
   onCheckForUpdates: () => void
   onDownloadUpdate: () => void
   onInstallUpdate: () => void
@@ -212,7 +219,22 @@ export function AppHeader({
         className={`app-header ${isMac ? 'app-header--mac' : ''} ${isWindows ? 'app-header--windows' : ''}`.trim()}
         role="banner"
       >
-        <div className="app-header__section app-header__section--left" />
+        <div className="app-header__section app-header__section--left">
+          {showSidebarTrigger ? (
+            <IconButton
+              ref={sidebarTriggerRef}
+              className="app-header__navigation-button"
+              label={t('commandCenter.sidebar')}
+              data-testid="primary-sidebar-open"
+              aria-expanded={isSidebarOpen}
+              aria-controls="primary-sidebar-navigation"
+              aria-haspopup="dialog"
+              onClick={onToggleSidebar}
+            >
+              <PanelLeft size={20} aria-hidden="true" />
+            </IconButton>
+          ) : null}
+        </div>
 
         <div
           className="app-header__center"
@@ -339,18 +361,6 @@ export function AppHeader({
             }}
           >
             <Bug aria-hidden="true" size={18} />
-          </button>
-          <button
-            type="button"
-            className="app-header__icon-button"
-            data-testid="app-header-settings"
-            aria-label={t('common.settings')}
-            title={t('common.settings')}
-            onClick={() => {
-              onOpenSettings()
-            }}
-          >
-            <Settings aria-hidden="true" size={18} />
           </button>
         </div>
       </header>

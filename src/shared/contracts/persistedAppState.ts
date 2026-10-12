@@ -21,7 +21,9 @@ export const PERSISTED_WORKSPACE_NODE_KINDS = [
   'role',
   'image',
   'document',
+  'folder',
   'website',
+  'plugin',
 ] as const
 
 export type PersistedWorkspaceNodeKind = (typeof PERSISTED_WORKSPACE_NODE_KINDS)[number]
@@ -151,6 +153,13 @@ export interface PersistedDocumentNodeData {
   uri: string
 }
 
+export interface PersistedFolderNodeData {
+  uri: string
+  rootUri: string
+  viewMode: 'icons' | 'list'
+  expandedDirectoryUris: string[]
+}
+
 export interface PersistedWebsiteNodeData {
   url?: string
   pinned?: boolean
@@ -161,13 +170,22 @@ export interface PersistedWebsiteNodeData {
   previousFrame?: PersistedNodeFrame | null
 }
 
+export interface PersistedPluginNodeData {
+  pluginId: string
+  schemaVersion: number
+  repoPath?: string
+  mountId?: string | null
+}
+
 export type PersistedNodePayload =
   | PersistedTaskNodeData
   | PersistedNoteNodeData
   | PersistedRoleNodeData
   | PersistedImageNodeData
   | PersistedDocumentNodeData
+  | PersistedFolderNodeData
   | PersistedWebsiteNodeData
+  | PersistedPluginNodeData
 
 export interface PersistedNodeContract {
   id: string
@@ -321,11 +339,20 @@ export interface PersistedSpaceArchiveNoteSnapshot extends PersistedSpaceArchive
   text: string
 }
 
+export interface PersistedSpaceArchivePluginSnapshot extends PersistedSpaceArchiveNodeSnapshotBase {
+  kind: 'plugin'
+  pluginId: string
+  schemaVersion?: number
+  repoPath?: string
+  mountId?: string | null
+}
+
 export type PersistedSpaceArchiveNodeSnapshot =
   | PersistedSpaceArchiveTerminalSnapshot
   | PersistedSpaceArchiveAgentSnapshot
   | PersistedSpaceArchiveTaskSnapshot
   | PersistedSpaceArchiveNoteSnapshot
+  | PersistedSpaceArchivePluginSnapshot
 
 export interface PersistedWorkspaceContract {
   id: string
@@ -341,6 +368,16 @@ export interface PersistedWorkspaceContract {
   spaces?: PersistedSpaceContract[]
   activeSpaceId?: string | null
   spaceArchiveRecords?: PersistedSpaceArchiveRecord[]
+  /**
+   * Local canvas disclosure preferences. These IDs are workspace scoped so a
+   * collapsed window stays collapsed when the app is restarted. They are
+   * intentionally kept on the workspace envelope rather than node data: the
+   * compact shell is a presentation preference, not part of the node's
+   * canonical frame.
+   */
+  collapsedNodeIds?: string[]
+  /** Legacy Space disclosure IDs; migrated to collapsedNodeIds on load. */
+  collapsedSpaceIds?: string[]
 }
 
 /** Cross-process durable app-state shape specialized by the settings domain at each boundary. */

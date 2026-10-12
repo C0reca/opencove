@@ -1,8 +1,5 @@
 import React from 'react'
 import {
-  Background,
-  BackgroundVariant,
-  Controls,
   PanOnScrollMode,
   ReactFlow,
   SelectionMode,
@@ -12,6 +9,7 @@ import {
   type Node,
 } from '@xyflow/react'
 import type { TerminalNodeData } from '../../types'
+import { WorkspaceCanvasControls } from './collapse/WorkspaceCanvasControls'
 import { MAX_CANVAS_ZOOM, MIN_CANVAS_ZOOM } from './constants'
 import type { WorkspaceCanvasViewProps } from './WorkspaceCanvasView.types'
 import { useActiveExplorerSpace } from './hooks/useActiveExplorerSpace'
@@ -21,6 +19,7 @@ import { useWorkspaceCanvasLabelColorFilter } from './hooks/useLabelColorFilter'
 import { useViewportDprSnapping } from './hooks/useViewportDprSnapping'
 import { useSpaceWorktreeBusyLabels } from './hooks/useSpaceWorktreeBusyLabels'
 import { WorkspaceCanvasMenus } from './view/WorkspaceCanvasMenus'
+import { WorkspaceCanvasBackground } from './view/WorkspaceCanvasBackground'
 import { WorkspaceCanvasWindows } from './view/WorkspaceCanvasWindows'
 import { WorkspaceMinimapDock } from './view/WorkspaceMinimapDock'
 import { WorkspaceSelectionDraftOverlay } from './view/WorkspaceSelectionDraftOverlay'
@@ -29,13 +28,12 @@ import { WorkspaceCanvasTopOverlays } from './view/WorkspaceCanvasTopOverlays'
 import { WorkspaceSpaceExplorerOverlay } from './view/WorkspaceSpaceExplorerOverlay'
 import { WorkspaceSpaceQuickPreview } from './view/WorkspaceSpaceQuickPreview'
 import { WorkspaceSpaceRegionsOverlay } from './view/WorkspaceSpaceRegionsOverlay'
-import { isEditableDomTarget } from './domTargets'
+import { WorkspaceCanvasActionBar } from './view/WorkspaceCanvasActionBar'
+import { useCanvasViewPointerEvents } from './hooks/useCanvasViewPointerEvents'
 import { selectDragSurfaceSelectionMode } from '../terminalNode/reactFlowState'
 
-const WHEEL_BLOCK_SELECTOR =
-  '.cove-window, .cove-window-backdrop, .workspace-context-menu, .workspace-space-explorer, .workspace-space-quick-preview'
-
 export function WorkspaceCanvasView({
+  workspaceId,
   canvasRef,
   resolvedCanvasInputMode,
   isCanvasWheelGestureCaptureActive,
@@ -48,6 +46,10 @@ export function WorkspaceCanvasView({
   handleCanvasPaste,
   handleCanvasDragOver,
   handleCanvasDrop,
+  createNodeAtViewportCenter,
+  createNodeAtPoint,
+  clearActionBarTransientUi,
+  resolveDropTargetLabel,
   nodes,
   edges,
   nodeTypes,
@@ -57,7 +59,6 @@ export function WorkspaceCanvasView({
   onNodeClick,
   onNodeContextMenu,
   onSelectionContextMenu,
-  onSelectionChange,
   onNodeDragStart,
   onSelectionDragStart,
   onNodeDragStop,
@@ -109,6 +110,7 @@ export function WorkspaceCanvasView({
   createTerminalNode,
   createNoteNodeFromContextMenu,
   createWebsiteNodeFromContextMenu,
+  createPluginNodeFromContextMenu,
   arrangeAll,
   arrangeCanvas,
   arrangeInSpace,
@@ -209,33 +211,19 @@ export function WorkspaceCanvasView({
     nodes,
   })
 
-  const activeExplorerSpace = useActiveExplorerSpace(openExplorerSpaceId, spaces)
+  const activeExplorerSpace = useActiveExplorerSpace(openExplorerSpaceId, spaces, spaceFramePreview)
 
-  React.useEffect(() => {
-    if (!useManualCanvasWheelGestures) {
-      return
-    }
-
-    const canvasElement = canvasRef.current
-    if (!canvasElement) {
-      return
-    }
-
-    const handleWheel = (event: WheelEvent): void => {
-      if (event.target instanceof Element && event.target.closest(WHEEL_BLOCK_SELECTOR)) {
-        return
-      }
-
-      handleCanvasWheelCapture(event)
-    }
-
-    const wheelListenerOptions = { passive: false, capture: true } as const
-    canvasElement.addEventListener('wheel', handleWheel, wheelListenerOptions)
-
-    return () => {
-      canvasElement.removeEventListener('wheel', handleWheel, true)
-    }
-  }, [canvasRef, handleCanvasWheelCapture, useManualCanvasWheelGestures])
+  const pointerEvents = useCanvasViewPointerEvents({
+    canvasRef,
+    contextMenu,
+    spaceActionMenu,
+    closeContextMenu,
+    useManualCanvasWheelGestures,
+    handleCanvasWheelCapture,
+    handleCanvasPointerDownCapture,
+    handleCanvasPointerMoveCapture,
+    handleCanvasPointerUpCapture,
+  })
 
   return (
     <div
@@ -251,24 +239,7 @@ export function WorkspaceCanvasView({
       onDragOver={handleCanvasDragOver}
       onDrop={handleCanvasDrop}
       onDoubleClickCapture={handleCanvasDoubleClickCapture}
-      onPointerDownCapture={event => {
-        if (event.button === 0 && !isEditableDomTarget(event.target)) {
-          canvasRef.current?.focus?.({ preventScroll: true })
-        }
-
-        if (
-          event.button === 0 &&
-          (contextMenu !== null || spaceActionMenu !== null) &&
-          event.target instanceof Element &&
-          !event.target.closest('.workspace-context-menu')
-        ) {
-          closeContextMenu()
-        }
-
-        handleCanvasPointerDownCapture(event)
-      }}
-      onPointerMoveCapture={handleCanvasPointerMoveCapture}
-      onPointerUpCapture={handleCanvasPointerUpCapture}
+      {...pointerEvents}
     >
       <ReactFlow<Node<TerminalNodeData>, Edge>
         nodes={filteredNodes}
@@ -290,7 +261,6 @@ export function WorkspaceCanvasView({
         onNodeClick={onNodeClick}
         onNodeContextMenu={onNodeContextMenu}
         onSelectionContextMenu={onSelectionContextMenu}
-        onSelectionChange={onSelectionChange}
         onNodeDragStart={onNodeDragStart}
         onSelectionDragStart={onSelectionDragStart}
         onNodeDragStop={onNodeDragStop}
@@ -325,11 +295,11 @@ export function WorkspaceCanvasView({
         maxZoom={MAX_CANVAS_ZOOM}
         proOptions={{ hideAttribution: true }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          size={1}
-          gap={24}
-          color="var(--cove-canvas-dot)"
+        <WorkspaceCanvasBackground
+          key={workspaceId}
+          settings={agentSettings}
+          canvasRef={canvasRef}
+          nodes={filteredNodes}
         />
         <WorkspaceSpaceRegionsOverlay
           workspacePath={workspacePath}
@@ -355,10 +325,11 @@ export function WorkspaceCanvasView({
           setIsMinimapVisible={setIsMinimapVisible}
           onMinimapVisibilityChange={onMinimapVisibilityChange}
         />
-        <Controls className="workspace-canvas__controls" showInteractive={false} />
+        <WorkspaceCanvasControls />
       </ReactFlow>
       {activeExplorerSpace && activeExplorerSpace.rect ? (
         <WorkspaceSpaceExplorerOverlay
+          key={activeExplorerSpace.id}
           spaceId={activeExplorerSpace.id}
           spaceName={activeExplorerSpace.name}
           targetMountId={activeExplorerSpace.targetMountId ?? null}
@@ -386,6 +357,14 @@ export function WorkspaceCanvasView({
       />
       <WorkspaceSnapGuidesOverlay guides={snapGuides} />
       <WorkspaceSelectionDraftOverlay canvasRef={canvasRef} draft={selectionDraft} />
+      <WorkspaceCanvasActionBar
+        canvasRef={canvasRef}
+        defaultAgentProvider={agentSettings.defaultProvider}
+        onCreateAtCenter={createNodeAtViewportCenter}
+        onCreateAtPoint={createNodeAtPoint}
+        onInteractionStart={clearActionBarTransientUi}
+        resolveDropTargetLabel={resolveDropTargetLabel}
+      />
       <WorkspaceCanvasTopOverlays
         spaces={spaces}
         activateSpace={activateSpace}
@@ -411,6 +390,7 @@ export function WorkspaceCanvasView({
         createTerminalNode={createTerminalNode}
         createNoteNodeFromContextMenu={createNoteNodeFromContextMenu}
         createWebsiteNodeFromContextMenu={createWebsiteNodeFromContextMenu}
+        createPluginNodeFromContextMenu={createPluginNodeFromContextMenu}
         openTaskCreator={openTaskCreator}
         openRoleCreator={openRoleCreator}
         openAgentLauncher={openAgentLauncher}

@@ -8,12 +8,14 @@ export function SettingsGroup({
   id,
   title,
   description,
+  actions,
   className,
   children,
 }: {
   id: string
   title: string
   description?: ReactNode
+  actions?: ReactNode
   className?: string
   children: ReactNode
 }): React.JSX.Element {
@@ -28,10 +30,16 @@ export function SettingsGroup({
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
     >
-      <header className="settings-panel__group-header">
+      <header
+        className={joinClassName(
+          'settings-panel__group-header',
+          actions ? 'settings-panel__group-header--actions' : undefined,
+        )}
+      >
         <h3 className="settings-panel__group-title" id={titleId}>
           {title}
         </h3>
+        {actions}
         {description ? (
           <p className="settings-panel__group-description" id={descriptionId}>
             {description}
@@ -63,11 +71,13 @@ export function SettingsModule({
   id,
   title,
   description,
+  actions,
   children,
 }: {
   id: string
   title: string
   description?: ReactNode
+  actions?: ReactNode
   children: ReactNode
 }): React.JSX.Element {
   const titleId = `${id}-title`
@@ -81,7 +91,12 @@ export function SettingsModule({
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
     >
-      <header className="settings-panel__module-header">
+      <header
+        className={joinClassName(
+          'settings-panel__module-header',
+          actions ? 'settings-panel__module-header--actions' : undefined,
+        )}
+      >
         <h4 className="settings-panel__module-title" id={titleId}>
           {title}
         </h4>
@@ -90,6 +105,7 @@ export function SettingsModule({
             {description}
           </p>
         ) : null}
+        {actions}
       </header>
       <div className="settings-panel__module-content">{children}</div>
     </section>

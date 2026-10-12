@@ -10,6 +10,8 @@ import { printUsage } from './usage.mjs'
 import { CONTROL_SURFACE_PROTOCOL_VERSION } from './constants.mjs'
 import { tryHandleMultiEndpointCommands } from './commands/multiEndpoint.mjs'
 import { tryHandleNodeControlCommands } from './commands/nodeControl.mjs'
+import { createPluginGuideResult } from './pluginGuide.mjs'
+import { parsePluginCommand, resolvePluginCommandTimeout } from './commands/plugins.mjs'
 import {
   getWorkerLifecycleStatus,
   printWorkerLifecycleResult,
@@ -42,11 +44,28 @@ async function main() {
 
   if (wantsHelp || command.length === 0) {
     printUsage()
-    process.exit(command.length === 0 ? 2 : 0)
+    process.exit(wantsHelp ? 0 : 2)
   }
 
   if (command === 'runtime') {
     await handleRuntimeCommand(args.slice(1))
+    return
+  }
+
+  let pluginRequest
+  if (command === 'plugin') {
+    try {
+      pluginRequest = parsePluginCommand(args)
+    } catch (error) {
+      process.stderr.write(`[opencove] ${toErrorMessage(error)}\n`)
+      process.exitCode = 2
+      return
+    }
+  }
+
+  if (command === 'plugin' && !pluginRequest) {
+    const result = await createPluginGuideResult()
+    process.stdout.write(`${pretty ? JSON.stringify(result, null, 2) : JSON.stringify(result)}\n`)
     return
   }
 
@@ -156,6 +175,17 @@ async function main() {
       { pretty, timeoutMs },
     )
 
+    return
+  }
+
+  if (command === 'plugin') {
+    const result = await invokeAndPrint(connection, pluginRequest, {
+      pretty,
+      timeoutMs: resolvePluginCommandTimeout(pluginRequest, timeoutMs),
+    })
+    if (['failed', 'conflict'].includes(result?.value?.status)) {
+      process.exitCode = 1
+    }
     return
   }
 

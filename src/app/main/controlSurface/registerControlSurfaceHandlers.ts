@@ -1,3 +1,7 @@
+import { registerPluginHostHandlers } from './handlers/pluginHostHandlers'
+import type { ControlSurfaceContext } from './types'
+import type { PluginDistributionService } from '@contexts/plugins/application/PluginDistributionService'
+import type { PluginInstallationManager } from '../../../contexts/plugins/application/PluginInstallationManager'
 import type { ControlSurface } from './controlSurface'
 import type { ApprovedWorkspaceStore } from '../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStoreCore'
 import type { PersistenceStore } from '../../../platform/persistence/sqlite/PersistenceStore'
@@ -26,6 +30,8 @@ import { registerSyncHandlers } from './handlers/syncHandlers'
 import { registerTopologyHandlers } from './handlers/topologyHandlers'
 import { registerAuthHandlers } from './handlers/authHandlers'
 import { registerNodeControlHandlers } from './handlers/nodeControlHandlers'
+import { registerPluginHandlers } from './handlers/pluginHandlers'
+import { registerPluginCommandHandlers } from './handlers/pluginCommandHandlers'
 import type { EndpointHealthService } from './topology/endpointHealthService'
 import type { NormalizedPersistedAppState } from '../../../platform/persistence/sqlite/normalize'
 import type {
@@ -39,6 +45,9 @@ import type { TerminalAgentActivityEnvironmentService } from '../../../contexts/
 export function registerControlSurfaceHandlers(
   controlSurface: ControlSurface,
   deps: {
+    context: ControlSurfaceContext
+    pluginDistribution?: PluginDistributionService
+    plugins: PluginInstallationManager
     approvedWorkspaces: ApprovedWorkspaceStore
     userDataPath: string
     topology: WorkerTopologyStore
@@ -144,6 +153,14 @@ export function registerControlSurfaceHandlers(
     getPersistenceStore: deps.getPersistenceStore,
     publishSyncEvent: deps.publishSyncEvent,
     closeWebsiteNode: deps.closeWebsiteNode,
+    closePluginNode: nodeId => deps.plugins.closeNodeViews(nodeId),
+  })
+  registerPluginHostHandlers(controlSurface, deps)
+  registerPluginHandlers(controlSurface, deps.plugins, deps.pluginDistribution)
+  registerPluginCommandHandlers(controlSurface, {
+    plugins: deps.plugins,
+    getPersistenceStore: deps.getPersistenceStore,
+    publishSyncEvent: deps.publishSyncEvent,
   })
   registerSyncHandlers(controlSurface, deps.getPersistenceStore, {
     onStatePersisted: deps.onStatePersisted,

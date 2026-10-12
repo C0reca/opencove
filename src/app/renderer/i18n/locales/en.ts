@@ -1,3 +1,4 @@
+import { enTerminalLink } from './en.terminalLink'
 import { enMessages } from './en.messages'
 import { enCommonRemoteEndpoints } from './en.commonRemoteEndpoints'
 import { enShell } from './en.shell'
@@ -9,9 +10,30 @@ import { enIssueReport } from './en.issueReport'
 import { enPerformanceMonitor } from './en.performanceMonitor'
 import { enRole } from './en.role'
 import { enWorkspaceCanvas } from './en.workspaceCanvas'
+import { enSidebarView } from './en.sidebarView'
+import { enCanvasCollapse } from './en.canvasCollapse'
+import { enSpaceCollapse } from './en.spaceCollapse'
 
 export const en = {
+  pluginHostExtensions: {
+    themeLoadFailed:
+      'This theme could not be loaded. Pixel is shown while your selection is preserved.',
+    restoreTheme: 'Use Pixel',
+
+    emptySidebar: 'No items.',
+    invalidPreference: 'Enter a valid value for this preference.',
+    staleCommand: 'This plugin changed. Open the menu again.',
+    preferences: 'Preferences',
+    commands: 'Plugin commands',
+    completed: '{{title}} completed.',
+    unavailableTheme:
+      'This theme is unavailable. The default theme is shown until it is enabled again.',
+  },
+  ...enCanvasCollapse,
+  ...enSpaceCollapse,
   common: {
+    actions: 'Actions',
+    back: 'Back',
     closeShortcutSelectWindow: 'Select the window you want to close.',
     closeShortcutFailed: 'Could not close the selected window. Please try again.',
     quitShortcutHint: 'Press {{shortcut}} again within 1.5 seconds to quit.',
@@ -60,6 +82,14 @@ export const en = {
     done: 'DONE',
   },
   sidebar: {
+    ...enSidebarView,
+    rootCanvas: 'Project canvas',
+    projectMore: 'Project options',
+    spaceMore: 'Space options',
+    agentMore: 'Agent options',
+    remoteProject: 'Remote project',
+    agentsNeedInput_one: '{{count}} agent needs input',
+    agentsNeedInput_other: '{{count}} agents need input',
     projects: 'Projects',
     addProject: 'Add',
     pin: 'Pin Sidebar',
@@ -76,7 +106,7 @@ export const en = {
     collapseProjectAgents: 'Collapse project agents',
     status: {
       working: 'Working',
-      waiting: 'Waiting',
+      waiting: 'Needs input',
       standby: 'Standby',
     },
     terminals_one: '{{count}} terminal',
@@ -142,6 +172,7 @@ export const en = {
       projects: 'Projects',
     },
     commands: {
+      searchWorkspace: 'Search Current Project',
       openSettings: 'Settings',
       openSettingsHint: 'Open Settings',
       spaceArchives: 'Space Archives',
@@ -277,6 +308,7 @@ export const en = {
     moreActions: 'Task actions',
     deleteTask: 'Delete task',
     noTags: 'No tags',
+    editMeta: 'Edit priority and tags',
     requirement: 'Task Requirement',
     agents: 'Agent Sessions',
     noAgentSessionsYet: 'No agent sessions yet.',
@@ -363,29 +395,7 @@ export const en = {
     geometrySyncFailed: 'Terminal size could not be confirmed. Retry to fit this window.',
     retryGeometrySync: 'Retry sizing',
   },
-  terminalLink: {
-    actions: 'Terminal link',
-    hint: 'Click for actions · {{modifier}}-click to open',
-    click: 'Click',
-    openFile: 'Open file',
-    previewImage: 'Preview image',
-    playAudio: 'Play audio',
-    playVideo: 'Play video',
-    openBrowser: 'Open in browser',
-    openFinder: 'Open in Finder',
-    openFolder: 'Open folder',
-    openExplorer: 'Open in file explorer',
-    openWithDefaultApp: 'Open with default app',
-    noDestination: 'No file view is available for this source in the current project.',
-    copy: 'Copy',
-    resolving: 'Checking target…',
-    confirmDirectory:
-      'This path uses the terminal launch directory. Confirm the target before opening.',
-    notFound: 'The target was not found.',
-    forbidden: 'The target is outside the allowed filesystem scope.',
-    unavailable: 'This target cannot be opened in the current environment.',
-    openFailed: 'Could not open this target. Please try again.',
-  },
+  terminalLink: enTerminalLink,
   terminalFind: {
     placeholder: 'Find…',
     previous: 'Previous match',

@@ -1,3 +1,7 @@
+import { zhCNSettingsPanelAgent } from './zh-CN.settingsPanel.agent'
+import { zhCNSettingsPanelPlugins } from './zh-CN.settingsPanel.plugins'
+import { zhCNSettingsPanelAppearanceNext } from './zh-CN.settingsPanel.appearanceNext'
+import { zhCNSettingsPanelAgentDetail } from './zh-CN.settingsPanel.agentDetail'
 import { zhCNTerminalDisplayCalibration } from './zh-CN.terminalDisplayCalibration'
 import { zhCNSettingsPanelDiagnostics } from './zh-CN.settingsPanel.diagnostics'
 import { zhCNSettingsPanelEndpoints } from './zh-CN.settingsPanel.endpoints'
@@ -6,6 +10,9 @@ import { zhCNSettingsPanelWorkspace } from './zh-CN.settingsPanel.workspace'
 import { zhCNWorkspaceCanvasNavigationShortcutCommands } from './zh-CN.settingsPanel.shortcuts.workspaceCanvasNavigation'
 
 export const zhCNSettingsPanel = {
+  plugins: zhCNSettingsPanelPlugins,
+  agentDetail: zhCNSettingsPanelAgentDetail,
+  appearanceNext: zhCNSettingsPanelAppearanceNext,
   title: '设置',
   search: {
     label: '搜索设置',
@@ -13,6 +20,7 @@ export const zhCNSettingsPanel = {
     noResults: '未找到匹配的设置',
   },
   nav: zhCNSettingsPanelLayout.nav,
+  navigation: zhCNSettingsPanelLayout.navigation,
   navGroups: zhCNSettingsPanelLayout.navGroups,
   pageDescriptions: zhCNSettingsPanelLayout.pageDescriptions,
   groups: zhCNSettingsPanelLayout.groups,
@@ -28,6 +36,8 @@ export const zhCNSettingsPanel = {
       dark: '深色',
       ember: '余烬',
       emberLight: '余烬浅色',
+      pixel: '空间点阵',
+      pixelLight: '浅色点阵',
     },
     interfaceFontSize: '界面字体大小',
     terminalFontSize: '终端字体大小',
@@ -76,24 +86,7 @@ export const zhCNSettingsPanel = {
   },
   appearance: zhCNSettingsPanelLayout.appearance,
   terminal: zhCNSettingsPanelLayout.terminal,
-  agent: {
-    title: 'Agent',
-    defaultAgentLabel: '默认 Agent',
-    defaultAgentHelp: '新任务和终端默认使用的 AI 提供方。',
-    agentListLabel: 'Agents',
-    agentProviderOrderLabel: 'Agent 菜单排序',
-    agentProviderOrderHelp: '在一个列表里设置默认 Agent、排序、安装状态、模型和启动环境。',
-    defaultBadge: '默认',
-    configure: '配置',
-    done: '完成',
-    envSummary_one: '{{count}} 个环境变量',
-    envSummary_other: '{{count}} 个环境变量',
-    envSummaryNone: '无环境变量',
-    moveUp: '上移',
-    moveDown: '下移',
-    fullAccessLabel: '完全访问模式',
-    fullAccessHelp: '为 Agent 关闭沙箱和人工审批。',
-  },
+  agent: zhCNSettingsPanelAgent,
   agentEnv: {
     title: 'Agent 环境变量',
     help: '启动 Agent 时新增或覆写环境变量。',
@@ -211,6 +204,12 @@ export const zhCNSettingsPanel = {
       large: '大',
     },
     viewportTransitionLabel: '视口转移效果',
+    nodeExpandBehaviorLabel: '窗口展开方式',
+    nodeExpandBehaviorHelp: '选择重新展开折叠窗口时，如何安排画布上的空间。',
+    nodeExpandBehavior: {
+      'push-away': '原位展开，推开其他窗口',
+      'find-space': '在附近空位展开',
+    },
     viewportTransitionHelp: '选择窗口节点与 Space 之间的视口移动效果，遵循系统减少动态效果设置。',
     viewportTransition: { fly: '缩放飞行', slide: '平滑移动' },
     focusOnClickLabel: '点击自动定位',
@@ -236,7 +235,7 @@ export const zhCNSettingsPanel = {
     workerWebUi: {
       title: 'Worker Web UI',
       securityTitle: '访问安全',
-      help: '通过本机 Worker 提供的浏览器 UI（实验性）。',
+      help: '通过本机 Worker 提供的浏览器 UI。',
       enabledLabel: '启用 Web UI',
       enabledHelp: '开启或关闭本机 Worker 托管的 Web UI 与 Debug Shell，不会重启终端。',
       portLabel: '端口',
@@ -367,6 +366,10 @@ export const zhCNSettingsPanel = {
         title: '创建终端',
         help: '从根画布视觉中心创建一个终端。',
       },
+      workspaceCanvasCreateAgent: {
+        title: '启动 Agent',
+        help: '在画布中心启动默认 Agent。输入框、终端和编辑器仍保留全选。',
+      },
       workspaceCanvasCycleSpacesForward: {
         title: '下一个 Space',
         help: '按左上角 Space pill 顺序切换到下一个 Space，不包含全局。',
@@ -415,10 +418,9 @@ export const zhCNSettingsPanel = {
     title: 'Worker',
     errors: {
       remoteRequired: '远程机器需要填写主机、端口和访问令牌。',
-      remoteExperimentalDisabled:
-        '远程机器为实验性功能。请先在「Worker 与连接」中启用远程机器后再继续。',
+      remoteExperimentalDisabled: '远程机器为实验性功能。请先在「连接」中启用远程机器后再继续。',
       stopLocalWorkerFirst: '切换到 Standalone 前请先停止本机 Worker。',
-      enableLocalRequiresRestart: '请先启用本机 Worker 模式并重启，然后再启动 Worker。',
+      enableLocalRequiresRestart: '当前会话未使用本机 Worker。',
     },
     home: {
       title: 'Worker 模式',
@@ -458,7 +460,7 @@ export const zhCNSettingsPanel = {
     },
     local: {
       title: '本机 Worker',
-      help: '默认仅监听 127.0.0.1，并要求 token。远程访问建议使用 SSH tunnel。Worker Web UI 位于「Worker 与连接」。',
+      help: '默认仅监听 127.0.0.1，并要求 token。远程访问建议使用 SSH tunnel。Worker Web UI 位于「连接」。',
       statusLabel: 'Worker 状态',
       status: {
         running: '运行中',

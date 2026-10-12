@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import type { Node } from '@xyflow/react'
 import { useTranslation } from '@app/renderer/i18n'
 import type {
-  DocumentNodeData,
   ImageNodeData,
   Point,
   TaskPriority,
@@ -17,7 +16,6 @@ import { guardNodeFromSyncOverwrite } from '../../../utils/syncNodeGuards'
 import { resolveImageNodeSizeFromNaturalDimensions } from '../../../utils/workspaceNodeSizing'
 import {
   resolveDefaultAgentWindowSize,
-  resolveDefaultDocumentWindowSize,
   resolveDefaultImageWindowSize,
   resolveDefaultNoteWindowSize,
   resolveDefaultTaskWindowSize,
@@ -28,16 +26,21 @@ import type {
   CreateNoteNodeOptions,
   UseWorkspaceCanvasNodeCreationParams,
 } from './useNodesStore.types'
-import { resolveDocumentTitleFromUri } from './useNodesStore.documentTitle'
+import { useWorkspaceCanvasFilesystemNodeCreation } from './useNodesStore.createFilesystemNodes'
 import { EMPTY_NODE_KIND_DATA } from './useNodesStore.nodeData'
 import { useWorkspaceCanvasWebsiteNodeCreation } from './useNodesStore.createWebsiteNode'
 import { useWorkspaceCanvasRoleNodeCreation } from './useNodesStore.createRoleNode'
-import { resolveNodesPlacement } from './useNodesStore.resolvePlacement'
+import { useWorkspaceCanvasPluginNodeCreation } from './useNodesStore.createPluginNode'
+import {
+  resolveCreationInteractionLayout,
+  resolveNodesPlacement,
+} from './useNodesStore.resolvePlacement'
 
 function resolveSpaceRects(spaces: WorkspaceSpaceState[]): WorkspaceSpaceRect[] {
   return spaces.map(space => space.rect).filter((rect): rect is WorkspaceSpaceRect => rect !== null)
 }
 export function useWorkspaceCanvasNodeCreation({
+  workspaceId,
   nodesRef,
   spacesRef,
   onRequestPersistFlush,
@@ -78,10 +81,11 @@ export function useWorkspaceCanvasNodeCreation({
           ? resolveDefaultAgentWindowSize(standardWindowSizeBucket, agent?.provider)
           : resolveDefaultTerminalWindowSize(standardWindowSizeBucket)
       const resolvedPlacement = resolveNodesPlacement({
+        workspaceId,
+        getSpaces: () => spacesRef.current,
         anchor,
         size: defaultSize,
         getNodes: () => nodesRef.current,
-        getSpaceRects: () => resolveSpaceRects(spacesRef.current),
         targetSpaceRect: placement?.targetSpaceRect ?? null,
         preferredDirection: placement?.preferredDirection,
         avoidRects: placement?.avoidRects,
@@ -155,13 +159,19 @@ export function useWorkspaceCanvasNodeCreation({
       setNodes,
       spacesRef,
       standardWindowSizeBucket,
+      workspaceId,
       t,
     ],
   )
   const createNoteNode = useCallback(
     (anchor: Point, options: CreateNoteNodeOptions = {}): Node<TerminalNodeData> | null => {
       const noteSize = resolveDefaultNoteWindowSize(standardWindowSizeBucket)
-      const spaceObstacles: Rect[] = resolveSpaceRects(spacesRef.current).map(rect =>
+      const layout = resolveCreationInteractionLayout(
+        workspaceId,
+        nodesRef.current,
+        spacesRef.current,
+      )
+      const spaceObstacles: Rect[] = resolveSpaceRects(layout.spaces).map(rect =>
         inflateRect(
           {
             left: rect.x,
@@ -179,7 +189,7 @@ export function useWorkspaceCanvasNodeCreation({
               const placement = findNearestFreePositionOnRight(
                 anchor,
                 noteSize,
-                nodesRef.current,
+                layout.nodes,
                 undefined,
                 spaceObstacles,
               )
@@ -189,10 +199,11 @@ export function useWorkspaceCanvasNodeCreation({
               }
             })()
           : resolveNodesPlacement({
+              workspaceId,
+              getSpaces: () => spacesRef.current,
               anchor,
               size: noteSize,
               getNodes: () => nodesRef.current,
-              getSpaceRects: () => resolveSpaceRects(spacesRef.current),
               targetSpaceRect: options.placement?.targetSpaceRect ?? null,
               preferredDirection: options.placement?.preferredDirection,
               avoidRects: options.placement?.avoidRects,
@@ -250,6 +261,7 @@ export function useWorkspaceCanvasNodeCreation({
       setNodes,
       spacesRef,
       standardWindowSizeBucket,
+      workspaceId,
       t,
     ],
   )
@@ -267,10 +279,11 @@ export function useWorkspaceCanvasNodeCreation({
       const defaultTaskSize = resolveDefaultTaskWindowSize(standardWindowSizeBucket)
 
       const resolvedPlacement = resolveNodesPlacement({
+        workspaceId,
+        getSpaces: () => spacesRef.current,
         anchor,
         size: defaultTaskSize,
         getNodes: () => nodesRef.current,
-        getSpaceRects: () => resolveSpaceRects(spacesRef.current),
         targetSpaceRect: placementOptions?.targetSpaceRect ?? null,
         preferredDirection: placementOptions?.preferredDirection,
         avoidRects: placementOptions?.avoidRects,
@@ -332,11 +345,13 @@ export function useWorkspaceCanvasNodeCreation({
       setNodes,
       spacesRef,
       standardWindowSizeBucket,
+      workspaceId,
       t,
     ],
   )
 
   const { createRoleNode } = useWorkspaceCanvasRoleNodeCreation({
+    workspaceId,
     nodesRef,
     spacesRef,
     onRequestPersistFlush,
@@ -356,10 +371,11 @@ export function useWorkspaceCanvasNodeCreation({
         preferred: defaultSize,
       })
       const resolvedPlacement = resolveNodesPlacement({
+        workspaceId,
+        getSpaces: () => spacesRef.current,
         anchor,
         size: desiredSize,
         getNodes: () => nodesRef.current,
-        getSpaceRects: () => resolveSpaceRects(spacesRef.current),
         targetSpaceRect: placementOptions?.targetSpaceRect ?? null,
         preferredDirection: placementOptions?.preferredDirection,
         avoidRects: placementOptions?.avoidRects,
@@ -408,76 +424,24 @@ export function useWorkspaceCanvasNodeCreation({
       setNodes,
       spacesRef,
       standardWindowSizeBucket,
+      workspaceId,
       t,
     ],
   )
 
-  const createDocumentNode = useCallback(
-    (
-      anchor: Point,
-      document: DocumentNodeData,
-      placementOptions?: NodeCreationPlacementOptions,
-    ) => {
-      const defaultSize =
-        placementOptions?.sizeOverride ?? resolveDefaultDocumentWindowSize(standardWindowSizeBucket)
-      const resolvedPlacement = resolveNodesPlacement({
-        anchor,
-        size: defaultSize,
-        getNodes: () => nodesRef.current,
-        getSpaceRects: () => resolveSpaceRects(spacesRef.current),
-        targetSpaceRect: placementOptions?.targetSpaceRect ?? null,
-        preferredDirection: placementOptions?.preferredDirection,
-        avoidRects: placementOptions?.avoidRects,
-      })
-
-      if (resolvedPlacement.canPlace !== true) {
-        onShowMessage?.(t('messages.noWindowSlotNearby'), 'warning')
-        return null
-      }
-
-      const nextNode: Node<TerminalNodeData> = {
-        id: crypto.randomUUID(),
-        type: 'documentNode',
-        position: resolvedPlacement.placement,
-        data: {
-          sessionId: '',
-          title: resolveDocumentTitleFromUri(document.uri, t('documentNode.title')),
-          titlePinnedByUser: false,
-          width: defaultSize.width,
-          height: defaultSize.height,
-          kind: 'document',
-          status: null,
-          startedAt: null,
-          endedAt: null,
-          exitCode: null,
-          lastError: null,
-          scrollback: null,
-          ...EMPTY_NODE_KIND_DATA,
-          document,
-        },
-        draggable: true,
-        selectable: false,
-      }
-
-      guardNodeFromSyncOverwrite(nextNode.id, 2_500)
-      setNodes(prevNodes => [...prevNodes, nextNode])
-      notifyNodeCreated(nextNode.id, placementOptions?.focusViewportOnCreate)
-      onRequestPersistFlush?.()
-      return nextNode
-    },
-    [
-      nodesRef,
-      notifyNodeCreated,
-      onRequestPersistFlush,
-      onShowMessage,
-      setNodes,
-      spacesRef,
-      standardWindowSizeBucket,
-      t,
-    ],
-  )
+  const { createDocumentNode, createFolderNode } = useWorkspaceCanvasFilesystemNodeCreation({
+    workspaceId,
+    nodesRef,
+    spacesRef,
+    setNodes,
+    onRequestPersistFlush,
+    onShowMessage,
+    onNodeCreated,
+    standardWindowSizeBucket,
+  })
 
   const createWebsiteNode = useWorkspaceCanvasWebsiteNodeCreation({
+    workspaceId,
     nodesRef,
     spacesRef,
     onRequestPersistFlush,
@@ -488,6 +452,13 @@ export function useWorkspaceCanvasNodeCreation({
     browserDefaultMode,
   })
 
+  const createPluginNode = useWorkspaceCanvasPluginNodeCreation({
+    onShowMessage,
+    workspaceId,
+    spacesRef,
+    onNodeCreated,
+  })
+
   return {
     createNodeForSession,
     createNoteNode,
@@ -495,6 +466,8 @@ export function useWorkspaceCanvasNodeCreation({
     createRoleNode,
     createImageNode,
     createDocumentNode,
+    createFolderNode,
     createWebsiteNode,
+    createPluginNode,
   }
 }

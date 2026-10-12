@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { PluginSidebar } from '@contexts/plugins/presentation/renderer/PluginSidebar'
+import React, { useCallback, useEffect, useState } from 'react'
+import { MoreHorizontal, Settings } from 'lucide-react'
 import {
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -11,6 +14,7 @@ import {
 } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useTranslation } from '@app/renderer/i18n'
+import { IconButton } from '@app/renderer/components/ui/IconButton'
 import type { PersistNotice, ProjectContextMenuState } from '../types'
 import type { WorkspaceState } from '@contexts/workspace/presentation/renderer/types'
 import { SidebarToolbar } from './SidebarToolbar'
@@ -18,7 +22,7 @@ import { buildSidebarProjectTree } from '../utils/sidebarTree'
 import { SidebarAgentItemOverlay } from './SidebarAgentItems'
 import {
   getTreeChildGroups,
-  SortableWorkspaceItem,
+  SidebarWorkspaceNavigation,
   SpaceItemOverlay,
   WorkspaceItemOverlay,
 } from './SidebarWorkspaceItem'
@@ -30,23 +34,35 @@ import {
   type SidebarDragItemData,
 } from './SidebarDnd'
 import { useSidebarListScroll } from './useSidebarListScroll'
+import { SidebarProjectRailItem } from './SidebarProjectRailItem'
+import { SidebarRemoteDetails } from './SidebarRemoteDetails'
+import { useWorkspaceMountDetails } from '../hooks/useWorkspaceMountSummaries'
 import { useAppStore } from '../store/useAppStore'
 import { toggleSidebarCollapsedId } from '@contexts/settings/domain/sidebarTreeSettings'
+import {
+  setSidebarItemHidden,
+  type SidebarViewMode,
+} from '@contexts/settings/domain/sidebarViewSettings'
+import { projectSidebarView } from '../utils/sidebarView'
+import { SidebarViewControls } from './SidebarViewControls'
 
 export type SidebarVariant = 'docked' | 'rail' | 'peek'
-type SidebarTransition = 'collapsing' | 'expanding' | null
-
-const sidebarTransitionSettleMs = 260
-
 type SidebarProps = {
   variant?: SidebarVariant
   isPinned?: boolean
+  isMobile?: boolean
+  isMenuOpen?: boolean
+  onClose?: () => void
+  onInteractionActiveChange?: (active: boolean) => void
+  currentNodeId?: string | null
   workspaces: WorkspaceState[]
   activeWorkspaceId: string | null
   persistNotice: PersistNotice | null
   onTogglePinned?: () => void
   onAddProject?: (anchor?: { x: number; y: number }) => void
+  onOpenSettings?: () => void
   onSelectWorkspace: (workspaceId: string) => void
+  onSelectProjectCanvas?: (workspaceId: string) => void
   onSelectSpace: (workspaceId: string, spaceId: string) => void
   onOpenProjectContextMenu: (state: ProjectContextMenuState) => void
   onSelectAgentNode: (workspaceId: string, nodeId: string) => void
@@ -73,12 +89,19 @@ type ActiveSidebarDragItem = {
 export function Sidebar({
   variant = 'docked',
   isPinned = variant !== 'rail',
+  isMobile = false,
+  isMenuOpen = false,
+  onClose,
+  onInteractionActiveChange,
+  currentNodeId = null,
   workspaces,
   activeWorkspaceId,
   persistNotice,
   onTogglePinned = () => undefined,
   onAddProject = () => undefined,
+  onOpenSettings,
   onSelectWorkspace,
+  onSelectProjectCanvas = onSelectWorkspace,
   onSelectSpace,
   onOpenProjectContextMenu,
   onSelectAgentNode,
@@ -90,22 +113,41 @@ export function Sidebar({
 }: SidebarProps): React.JSX.Element {
   const { t } = useTranslation()
   const trees = workspaces.map(buildSidebarProjectTree)
+  const mountDetails = useWorkspaceMountDetails({ workspaces })
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
     }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   )
   const [activeDragItem, setActiveDragItem] = useState<ActiveSidebarDragItem | null>(null)
-  const collapsedWorkspaceIds = useAppStore(
-    state => state.agentSettings.sidebarCollapsedWorkspaceIds,
-  )
   const collapsedSpaceGroupIds = useAppStore(
     state => state.agentSettings.sidebarCollapsedSpaceGroupIds,
   )
   const setAgentSettings = useAppStore(state => state.setAgentSettings)
-  const [sidebarTransition, setSidebarTransition] = useState<SidebarTransition>(null)
-  const previousVariantRef = useRef(variant)
-  const transitionTimeoutRef = useRef<number | null>(null)
+  const [previewWorkspaceId, setPreviewWorkspaceId] = useState<string | null>(null)
+  const [isRemoteDetailsOpen, setIsRemoteDetailsOpen] = useState(false)
+  const [restoredLabel, setRestoredLabel] = useState<string | null>(null)
+  const sidebarView = useAppStore(state => state.agentSettings.sidebarView)
+  useEffect(() => setPreviewWorkspaceId(null), [activeWorkspaceId])
+  const isInteractionActive = activeDragItem !== null || isRemoteDetailsOpen
+  const isPreviewLocked = isInteractionActive || isMenuOpen
+  const displayedTree =
+    trees.find(tree => tree.workspace.id === (previewWorkspaceId ?? activeWorkspaceId)) ??
+    trees.find(tree => tree.workspace.id === activeWorkspaceId) ??
+    trees[0]
+  const projectedView = displayedTree ? projectSidebarView(displayedTree, sidebarView) : null
+  useEffect(() => {
+    if (!restoredLabel) {
+      return
+    }
+    const timeout = window.setTimeout(() => setRestoredLabel(null), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [restoredLabel])
+  useEffect(() => {
+    onInteractionActiveChange?.(isInteractionActive)
+    return () => onInteractionActiveChange?.(false)
+  }, [isInteractionActive, onInteractionActiveChange])
   const {
     scrollFade: sidebarListScrollFade,
     setListRef: setSidebarListRef,
@@ -191,19 +233,6 @@ export function Sidebar({
     ],
   )
 
-  const handleToggleProject = useCallback(
-    (workspaceId: string): void => {
-      setAgentSettings(prev => ({
-        ...prev,
-        sidebarCollapsedWorkspaceIds: toggleSidebarCollapsedId(
-          prev.sidebarCollapsedWorkspaceIds,
-          workspaceId,
-        ),
-      }))
-    },
-    [setAgentSettings],
-  )
-
   const handleToggleSpaceGroup = useCallback(
     (groupKey: string): void => {
       setAgentSettings(prev => ({
@@ -239,133 +268,191 @@ export function Sidebar({
     activeDragData?.kind === 'agent'
       ? (activeAgentGroup?.agents.find(agent => agent.node.id === activeDragData.nodeId) ?? null)
       : null
-  const activeSpaceGroupKey =
-    activeSpaceGroup && activeDragWorkspaceId
-      ? `${activeDragWorkspaceId}:${activeSpaceGroup.id}`
-      : null
-  useLayoutEffect(() => {
-    const previousVariant = previousVariantRef.current
-    if (previousVariant === variant) {
-      return
-    }
-
-    const nextTransition =
-      previousVariant === 'rail' && variant !== 'rail'
-        ? 'expanding'
-        : previousVariant !== 'rail' && variant === 'rail'
-          ? 'collapsing'
-          : null
-
-    previousVariantRef.current = variant
-    if (transitionTimeoutRef.current !== null) {
-      window.clearTimeout(transitionTimeoutRef.current)
-      transitionTimeoutRef.current = null
-    }
-    setSidebarTransition(nextTransition)
-    if (nextTransition === null) {
-      return
-    }
-
-    transitionTimeoutRef.current = window.setTimeout(() => {
-      setSidebarTransition(null)
-      transitionTimeoutRef.current = null
-    }, sidebarTransitionSettleMs)
-  }, [variant])
-
-  useEffect(() => {
-    return () => {
-      if (transitionTimeoutRef.current !== null) {
-        window.clearTimeout(transitionTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  const transitionClassName =
-    sidebarTransition === null
-      ? ''
-      : ` workspace-sidebar--transitioning workspace-sidebar--transition-${sidebarTransition}`
-  const className = `workspace-sidebar workspace-sidebar--${variant}${transitionClassName}`
+  const className = `workspace-sidebar workspace-sidebar--${variant}${isMobile ? ' workspace-sidebar--mobile' : ''}`
 
   return (
     <aside
       className={className}
+      data-cove-part="sidebar"
       data-testid="workspace-sidebar"
-      data-cove-sidebar-transition={sidebarTransition ?? 'idle'}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
+      data-cove-preview-workspace-id={displayedTree?.workspace.id}
+      onPointerLeave={event => {
+        if (!isPreviewLocked) {
+          setPreviewWorkspaceId(null)
+        }
+        onPointerLeave?.(event)
+      }}
     >
-      <SidebarToolbar
-        isPinned={isPinned}
-        showAddProject={variant !== 'rail' || sidebarTransition === 'collapsing'}
-        onTogglePinned={onTogglePinned}
-        onAddProject={onAddProject}
-      />
-      {variant !== 'rail' && persistNotice ? (
-        <div
-          className={`workspace-sidebar__persist-alert workspace-sidebar__persist-alert--${persistNotice.tone}`}
-        >
-          <strong>{t('sidebar.persistence')}</strong>
-          <span>{persistNotice.message}</span>
-        </div>
-      ) : null}
-      <div
-        ref={setSidebarListRef}
-        className="workspace-sidebar__list"
-        data-cove-scroll-fade={sidebarListScrollFade}
-        onScroll={handleSidebarListScroll}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={sidebarCollisionDetection}
+        measuring={{
+          droppable: {
+            strategy: MeasuringStrategy.Always,
+          },
+        }}
+        onDragStart={handleDragStart}
+        onDragCancel={() => setActiveDragItem(null)}
+        onDragEnd={handleDragEnd}
       >
-        {trees.length === 0 ? (
-          <p className="workspace-sidebar__empty">{t('sidebar.noProjectYet')}</p>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={sidebarCollisionDetection}
-            measuring={{
-              droppable: {
-                strategy: MeasuringStrategy.Always,
-              },
-            }}
-            onDragStart={handleDragStart}
-            onDragCancel={() => setActiveDragItem(null)}
-            onDragEnd={handleDragEnd}
+        <div className="workspace-project-rail" data-testid="workspace-project-rail">
+          <SidebarToolbar
+            isPinned={isPinned}
+            isMobile={isMobile}
+            onClose={onClose}
+            onTogglePinned={onTogglePinned}
+            onAddProject={onAddProject}
+          />
+          <div
+            ref={setSidebarListRef}
+            className="workspace-sidebar__list"
+            data-cove-scroll-fade={sidebarListScrollFade}
+            onScroll={handleSidebarListScroll}
           >
             <SortableContext
               items={trees.map(tree => tree.workspace.id)}
               strategy={verticalListSortingStrategy}
             >
               {trees.map(tree => (
-                <SortableWorkspaceItem
+                <SidebarProjectRailItem
                   key={tree.workspace.id}
-                  tree={tree}
+                  workspace={tree.workspace}
                   isActive={tree.workspace.id === activeWorkspaceId}
-                  isExpanded={collapsedWorkspaceIds[tree.workspace.id] !== true}
-                  collapsedSpaceGroupIds={collapsedSpaceGroupIds}
-                  onToggleProject={handleToggleProject}
-                  onToggleSpaceGroup={handleToggleSpaceGroup}
-                  onSelectWorkspace={onSelectWorkspace}
-                  onSelectSpace={onSelectSpace}
+                  isPreviewed={tree.workspace.id === displayedTree?.workspace.id}
+                  remote={mountDetails[tree.workspace.id]?.remote ?? null}
+                  waitingAgentCount={getTreeChildGroups(tree).reduce(
+                    (count, group) =>
+                      count + group.agents.filter(agent => agent.status === 'waiting').length,
+                    0,
+                  )}
+                  onPreview={workspaceId => {
+                    if (!isPreviewLocked && !isMobile) {
+                      setPreviewWorkspaceId(workspaceId)
+                    }
+                  }}
+                  onProjectPointerEnter={onPointerEnter}
+                  onSelectWorkspace={workspaceId => {
+                    setPreviewWorkspaceId(null)
+                    onSelectWorkspace(workspaceId)
+                  }}
                   onOpenProjectContextMenu={onOpenProjectContextMenu}
-                  onSelectAgentNode={onSelectAgentNode}
                 />
               ))}
             </SortableContext>
-
-            <DragOverlay dropAnimation={sidebarDropAnimation}>
-              {activeTree ? <WorkspaceItemOverlay tree={activeTree} /> : null}
-              {activeSpaceGroup ? (
-                <SpaceItemOverlay
-                  group={activeSpaceGroup}
-                  isExpanded={
-                    activeSpaceGroupKey === null ||
-                    collapsedSpaceGroupIds[activeSpaceGroupKey] !== true
-                  }
-                />
-              ) : null}
-              {activeAgentItem ? <SidebarAgentItemOverlay item={activeAgentItem} /> : null}
-            </DragOverlay>
-          </DndContext>
-        )}
-      </div>
+          </div>
+          {onOpenSettings ? (
+            <div className="workspace-sidebar__footer" data-testid="workspace-sidebar-footer">
+              <IconButton
+                className="workspace-sidebar__toolbar-button"
+                data-testid="app-header-settings"
+                label={t('common.settings')}
+                onClick={() => onOpenSettings()}
+              >
+                <Settings aria-hidden="true" />
+              </IconButton>
+            </div>
+          ) : null}
+        </div>
+        {variant !== 'rail' || isMobile ? (
+          <div className="workspace-sidebar__navigation" data-testid="workspace-sidebar-navigation">
+            {displayedTree ? (
+              <>
+                <header className="workspace-sidebar__project-header">
+                  <h2 title={displayedTree.workspace.name}>{displayedTree.workspace.name}</h2>
+                  <SidebarViewControls
+                    key={`view-mode-${displayedTree.workspace.id}`}
+                    mode={sidebarView.mode}
+                    hiddenWaitingCount={projectedView?.hiddenWaitingCount ?? 0}
+                    onChange={mode =>
+                      setAgentSettings(previous => ({
+                        ...previous,
+                        sidebarView: {
+                          ...previous.sidebarView,
+                          mode: mode as SidebarViewMode,
+                        },
+                      }))
+                    }
+                  />
+                  <SidebarRemoteDetails
+                    key={displayedTree.workspace.id}
+                    remote={mountDetails[displayedTree.workspace.id]?.remote ?? null}
+                    onOpenChange={setIsRemoteDetailsOpen}
+                  />
+                  <button
+                    type="button"
+                    className="workspace-sidebar__more"
+                    data-testid={`workspace-project-more-${displayedTree.workspace.id}`}
+                    aria-label={t('sidebar.projectMore')}
+                    title={t('sidebar.projectMore')}
+                    onClick={event => {
+                      const rect = event.currentTarget.getBoundingClientRect()
+                      const workspaceId = displayedTree.workspace.id
+                      onOpenProjectContextMenu({
+                        workspaceId,
+                        x: rect.right,
+                        y: rect.bottom,
+                        target: { kind: 'project', workspaceId },
+                      })
+                    }}
+                  >
+                    <MoreHorizontal size={15} aria-hidden="true" />
+                  </button>
+                </header>
+                {persistNotice ? (
+                  <div
+                    className={`workspace-sidebar__persist-alert workspace-sidebar__persist-alert--${persistNotice.tone}`}
+                  >
+                    <strong>{t('sidebar.persistence')}</strong>
+                    <span>{persistNotice.message}</span>
+                  </div>
+                ) : null}
+                <div className="workspace-sidebar__tree-scroll">
+                  <SidebarWorkspaceNavigation
+                    tree={projectedView?.tree ?? displayedTree}
+                    isActive={displayedTree.workspace.id === activeWorkspaceId}
+                    currentNodeId={currentNodeId}
+                    collapsedSpaceGroupIds={collapsedSpaceGroupIds}
+                    onToggleSpaceGroup={handleToggleSpaceGroup}
+                    onSelectProjectCanvas={onSelectProjectCanvas}
+                    onSelectSpace={onSelectSpace}
+                    onOpenProjectContextMenu={onOpenProjectContextMenu}
+                    onSelectAgentNode={onSelectAgentNode}
+                    onRestoreSidebarItem={(kind, itemId, name) => {
+                      setAgentSettings(previous => ({
+                        ...previous,
+                        sidebarView: setSidebarItemHidden(
+                          previous.sidebarView,
+                          kind,
+                          displayedTree.workspace.id,
+                          itemId,
+                          false,
+                        ),
+                      }))
+                      setRestoredLabel(name)
+                    }}
+                  />
+                  <PluginSidebar projectId={displayedTree.workspace.id} />
+                  {projectedView?.matchingAgentCount === 0 &&
+                  projectedView.tree.spaceGroups.length === 0 &&
+                  (sidebarView.mode ?? 'normal') !== 'normal' ? (
+                    <p className="workspace-sidebar__empty">{t('sidebar.noMatches')}</p>
+                  ) : null}
+                </div>
+                <div className="workspace-sidebar__feedback" role="status" aria-live="polite">
+                  {restoredLabel ? t('sidebar.restored', { name: restoredLabel }) : null}
+                </div>
+              </>
+            ) : (
+              <p className="workspace-sidebar__empty">{t('sidebar.noProjectYet')}</p>
+            )}
+          </div>
+        ) : null}
+        <DragOverlay dropAnimation={sidebarDropAnimation}>
+          {activeTree ? <WorkspaceItemOverlay tree={activeTree} /> : null}
+          {activeSpaceGroup ? <SpaceItemOverlay group={activeSpaceGroup} /> : null}
+          {activeAgentItem ? <SidebarAgentItemOverlay item={activeAgentItem} /> : null}
+        </DragOverlay>
+      </DndContext>
     </aside>
   )
 }

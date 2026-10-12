@@ -1,0 +1,66 @@
+.plugin-node-preview {
+  min-width: 0;
+}
+
+.plugin-node-preview__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.plugin-node-preview__heading h4 {
+  margin: 0 0 5px;
+  color: var(--cove-settings-section-foreground);
+  font-size: calc(13px * var(--cove-ui-font-scale));
+  font-weight: 600;
+}
+
+.plugin-node-preview__heading p {
+  margin: 0;
+  color: var(--cove-text-muted);
+  font-size: calc(11px * var(--cove-ui-font-scale));
+  line-height: 1.6;
+}
+
+.plugin-node-preview__canvas.workspace-canvas {
+  position: relative;
+  flex: none;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 260px;
+  max-height: 380px;
+  aspect-ratio: 616 / 380;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--cove-border-subtle);
+  border-radius: var(--cove-node-radius);
+  background: var(--cove-app-background);
+}
+
+.plugin-node-preview__canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--cove-accent) 28%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 14px 14px;
+  mask-image: linear-gradient(125deg, var(--cove-text), transparent 85%);
+}
+
+.plugin-node-preview__canvas > .react-flow {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+
+/* Fit a narrower real plugin body instead of shrinking a desktop window to unreadable text. */
+.plugin-node-preview__canvas[data-preview-compact] {
+  height: 340px;
+  aspect-ratio: auto;
+}

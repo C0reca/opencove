@@ -5,6 +5,7 @@ import type { TerminalNodeData } from '../../../types'
 import { cleanupNodeRuntimeArtifacts } from '../../../utils/nodeRuntimeCleanup'
 import { TERMINAL_LAYOUT_SYNC_EVENT } from '../../terminalNode/constants'
 import { type UseApplyNodeChangesParams } from './useApplyNodeChanges.helpers'
+import { publishWorkspaceNodesClosed } from '../nodeClosureEvents'
 
 type WorkspaceNodeChange = NodeChange<Node<TerminalNodeData>>
 type ContinuousDragPositionChange = NodePositionChange & { dragging: true }
@@ -63,6 +64,7 @@ export function useWorkspaceCanvasApplyNodeChanges({
   nodesRef,
   onNodesChange,
   onNodesCommit,
+  onSelectedNodeIdsChange,
   clearAgentLaunchToken,
   normalizePosition,
   applyPendingScrollbacks,
@@ -294,10 +296,24 @@ export function useWorkspaceCanvasApplyNodeChanges({
       })
 
       nodesRef.current = nextNodes
+      if (filteredChanges.some(change => change.type === 'select' || change.type === 'remove')) {
+        // Publish selection in the same transaction as the node change. Mirroring
+        // React Flow's later SelectionListener effect can replay an older selection
+        // after controlled nodes have already changed, creating a feedback loop.
+        onSelectedNodeIdsChange?.(nextNodes.filter(node => node.selected).map(node => node.id))
+      }
       if (onNodesCommit && !isDraggingThisFrame) {
         onNodesCommit(nextNodes)
       } else {
         onNodesChange(nextNodes)
+      }
+      if (removedIds.size > 0) {
+        const survivingIds = new Set(nextNodes.map(node => node.id))
+        publishWorkspaceNodesClosed(
+          currentNodes
+            .filter(node => removedIds.has(node.id) && !survivingIds.has(node.id))
+            .map(node => node.id),
+        )
       }
       if (shouldSyncLayout) {
         window.dispatchEvent(new Event(TERMINAL_LAYOUT_SYNC_EVENT))
@@ -313,6 +329,7 @@ export function useWorkspaceCanvasApplyNodeChanges({
       normalizePosition,
       onNodesCommit,
       onNodesChange,
+      onSelectedNodeIdsChange,
     ],
   )
 

@@ -47,6 +47,27 @@ describe('DocumentNode system opening', () => {
     await waitFor(() => expect(button()).toBeEnabled())
   })
 
+  it('does not query or offer local opening for an unresolved remote binding', () => {
+    render(<DocumentNodeSystemOpen {...reference} mountId={undefined} />)
+    expect(button()).toBeNull()
+    expect(canOpen).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('invalidates in-flight opening when the source binding is lost', async () => {
+    const pending = deferred<boolean>()
+    open.mockReturnValue(pending.promise)
+    const view = render(<DocumentNodeSystemOpen {...reference} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Open with default app' }))
+    const isCurrent = open.mock.calls[0][1]!
+    view.rerender(<DocumentNodeSystemOpen {...reference} mountId={undefined} />)
+    expect(isCurrent()).toBe(false)
+    expect(button()).toBeNull()
+    expect(canOpen).toHaveBeenCalledTimes(1)
+    await act(async () => pending.resolve(false))
+    expect(button()).toBeNull()
+  })
+
   it('keeps unavailable sources hidden', async () => {
     canOpen.mockResolvedValue(false)
     render(<DocumentNodeSystemOpen {...reference} />)

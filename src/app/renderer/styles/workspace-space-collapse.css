@@ -1,0 +1,40 @@
+.workspace-canvas .workspace-space-region__control,
+.workspace-canvas .workspace-space-region__menu {
+  display: inline-flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--cove-radius-sm);
+  background: transparent;
+  color: var(--cove-text-muted);
+  cursor: pointer;
+}
+
+.workspace-canvas .workspace-space-region__control:hover {
+  background: var(--cove-surface-hover);
+  color: var(--cove-text);
+}
+
+.workspace-space-region__collapse-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspace-canvas .workspace-space-region__control:focus-visible {
+  outline: 2px solid var(--cove-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .workspace-canvas .workspace-space-region__control,
+  .workspace-canvas .workspace-space-region__menu {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

@@ -40,6 +40,7 @@ function fixture() {
   const terminal = node('terminal')
   const remoteDocument = node('remote-document', uri)
   const localDocument = node('local-document', uri)
+  localDocument.data.workerBinding = { endpointId: 'local', mountId: 'local-mount' }
   const nodesRef = { current: [terminal, remoteDocument, localDocument] }
   const spacesRef = {
     current: [
@@ -90,8 +91,9 @@ describe('workspace document navigation', () => {
     terminal.data.workerBinding = { endpointId: 'local', mountId: null }
     options.nodesRef.current = [terminal]
     options.spacesRef.current = []
-    createDocumentNode.mockImplementation((anchor, document) => {
+    createDocumentNode.mockImplementation((anchor, document, _placement, binding) => {
       const created = node('created-document', document.uri)
+      created.data.workerBinding = binding
       created.position = anchor
       options.nodesRef.current = [...options.nodesRef.current, created]
       return created
@@ -203,7 +205,7 @@ describe('workspace document navigation', () => {
     expect(createDocumentNode).not.toHaveBeenCalled()
   })
 
-  it('discards pending file and directory navigation when the destination Space changes mounts', async () => {
+  it('preserves the bound document jump but discards directory navigation when its Space changes mounts', async () => {
     const { options, uri } = fixture()
     options.openExplorerSpaceId = 'remote-space'
     const { result, rerender } = renderHook(() => useWorkspaceDocumentNavigation(options))
@@ -221,7 +223,32 @@ describe('workspace document navigation', () => {
       space.id === 'remote-space' ? { ...space, targetMountId: 'replacement-mount' } : space,
     )
     rerender()
-    expect(result.current.navigationByNode.size).toBe(0)
+    expect(result.current.navigationByNode.size).toBe(1)
     expect(result.current.directoryTarget).toBeNull()
+  })
+
+  it('reveals a compact document through the collapse owner and only applies the latest link intent', async () => {
+    const { options, uri } = fixture()
+    const document = options.nodesRef.current[1]
+    const expanded = { ...document, position: { x: 400, y: 200 } }
+    options.expandNode = vi.fn(() => expanded)
+    const { result } = renderHook(() => useWorkspaceDocumentNavigation(options))
+    await act(async () => {
+      const first = result.current.openFileLink('terminal', {
+        uri,
+        mountId: 'remote-mount',
+        line: 4,
+      })
+      const second = result.current.openFileLink('terminal', {
+        uri,
+        mountId: 'remote-mount',
+        line: 9,
+      })
+      expect(await first).toBe(false)
+      expect(await second).toBe(true)
+    })
+    expect(options.expandNode).toHaveBeenCalledWith('remote-document')
+    expect(options.reactFlow.setCenter).toHaveBeenLastCalledWith(500, 300, expect.any(Object))
+    expect(result.current.navigationByNode.get('remote-document')?.line).toBe(9)
   })
 })

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { resolveHeaderDragTarget } from './workspace-canvas.gestures'
 import {
   beginDragMouse,
   clearAndSeedWorkspace,
@@ -93,29 +94,31 @@ test.describe('Workspace Canvas - Task Drag Renderer Recovery', () => {
         throw new Error('task position unavailable before drag')
       }
 
-      const sourceBox = await readLocatorClientRect(taskNode.locator('.task-node__header'))
+      // Reuse the drag target that accounts for title, icon and action hit areas.
+      const source = await resolveHeaderDragTarget(taskNode.locator('.task-node__header'))
+      const sourceBox = await readLocatorClientRect(source.header)
       const targetBox = await readLocatorClientRect(pane)
       const drag = await beginDragMouse(window, {
-        start: { x: sourceBox.x + 120, y: sourceBox.y + 18 },
+        start: {
+          x: sourceBox.x + source.position.x,
+          y: sourceBox.y + source.position.y,
+        },
         settleAfterPressMs: 0,
         settleBeforeReleaseMs: 0,
         settleAfterReleaseMs: 0,
       })
       try {
-        const injected = await window.evaluate(() => {
-          return window.__opencoveTerminalSelectionTestApi?.simulateDetachedRendererOnce?.(
-            'drag-crash-terminal',
-          )
+        const injection = await window.evaluate(() => {
+          const api = window.__opencoveTerminalSelectionTestApi
+          const injected = api?.simulateDetachedRendererOnce?.('drag-crash-terminal')
+          // Observe the armed read in the same renderer task. A separate evaluate
+          // yields to normal geometry/health work, which may already consume it.
+          return {
+            injected,
+            pending: api?.hasPendingDetachedRendererRead?.('drag-crash-terminal') ?? null,
+          }
         })
-        expect(injected).toBe(true)
-        expect(
-          await window.evaluate(
-            () =>
-              window.__opencoveTerminalSelectionTestApi?.hasPendingDetachedRendererRead?.(
-                'drag-crash-terminal',
-              ) ?? null,
-          ),
-        ).toBe(true)
+        expect(injection).toEqual({ injected: true, pending: true })
 
         await drag.moveTo({ x: targetBox.x + 260, y: targetBox.y + 220 })
       } finally {
