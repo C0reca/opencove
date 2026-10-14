@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### 💅 Changed
+
+- Appearance: bundle the Inter interface font so the interface looks the same on every platform. (#433)
+
 ### 🐛 Fixed
 
 - Agent: give each managed Claude launch its own conversation ID and preserve it across recovery, preventing same-directory nodes from binding to the newest unrelated transcript. (#425)
