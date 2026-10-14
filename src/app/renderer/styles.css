@@ -2,6 +2,7 @@
    specificity tricks. Runtime inline geometry and interaction guards stay authoritative. */
 @import '@xterm/xterm/css/xterm.css' layer(opencove);
 @import '@xyflow/react/dist/style.css' layer(opencove);
+@import './styles/fonts.css';
 
 @import './styles/base.css' layer(opencove);
 @import './styles/ui-controls.css' layer(opencove);

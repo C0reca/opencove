@@ -81,6 +81,9 @@
 - 次文字：`--cove-text-muted`
 - 辅助/弱化：`--cove-text-faint`
 - 禁止在 Light 模式出现“白字”（除非在深色 surface 上，且由 token 驱动）。
+- 界面字体随应用打包：Inter 可变字体（400–700，拉丁与拉丁扩展子集），定义在
+  `styles/fonts.css`，授权文本 `public/licenses/Inter-OFL.txt` 随构建产物分发；其他文字回退到
+  系统 UI 字体。终端字体由终端设置决定，不跟随界面字体。
 
 ### 3.3 交互状态
 
