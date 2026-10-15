@@ -92,3 +92,36 @@ test('shared components keep text contrast and target size in every built-in the
     await electronApp.close()
   }
 })
+
+test('acrylic surfaces blur and turn solid when the system reduces transparency', async () => {
+  const { electronApp, window: page } = await launchApp({
+    env: { OPENCOVE_TEST_UI_GALLERY: '1' },
+  })
+  try {
+    await expect(page.getByTestId('ui-gallery')).toBeVisible()
+    const material = () =>
+      page.getByTestId('ui-gallery-popover').evaluate(element => {
+        const style = getComputedStyle(element)
+        const alpha = style.backgroundColor.match(/[\d.]+/g)?.map(Number)[3] ?? 1
+        return { filter: style.backdropFilter, alpha }
+      })
+
+    // Emulate both values: CI's macOS virtual machines run with Reduce Transparency switched on.
+    const session = await page.context().newCDPSession(page)
+    const emulateTransparency = (value: 'no-preference' | 'reduce') =>
+      session.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-transparency', value }],
+      })
+
+    await emulateTransparency('no-preference')
+    await page.getByTestId('ui-gallery-open-popover').click()
+    await expect(page.getByTestId('ui-gallery-popover')).toHaveAttribute('data-material', 'acrylic')
+    await expect.poll(async () => (await material()).filter).toContain('blur')
+    expect((await material()).alpha).toBeLessThan(1)
+
+    await emulateTransparency('reduce')
+    await expect.poll(material).toEqual({ filter: 'none', alpha: 1 })
+  } finally {
+    await electronApp.close()
+  }
+})
