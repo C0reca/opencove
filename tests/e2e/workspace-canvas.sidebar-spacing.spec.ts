@@ -63,7 +63,7 @@ test.describe('Workspace Canvas - Sidebar Row Geometry', () => {
       const dockedNavigation = await rect(navigation)
       const spaceRect = await rect(space)
       const agentRect = await rect(agent)
-      expect(Math.abs(dockedRail.width - 52)).toBeLessThanOrEqual(1)
+      expect(Math.abs(dockedRail.width - 72)).toBeLessThanOrEqual(1)
       expect(
         Math.abs(dockedProject.x + dockedProject.width / 2 - dockedRail.x - dockedRail.width / 2),
       ).toBeLessThanOrEqual(1)
@@ -75,13 +75,27 @@ test.describe('Workspace Canvas - Sidebar Row Geometry', () => {
       )
       expect(agentRect.height).toBeGreaterThanOrEqual(28)
 
+      // Pointing at the current project keeps its full edge bar.
+      await window.emulateMedia({ reducedMotion: 'reduce' })
+      await project.hover()
+      await expect
+        .poll(() =>
+          project.evaluate(
+            element =>
+              getComputedStyle(element.closest('.workspace-project-rail__item')!, '::before')
+                .height,
+          ),
+        )
+        .toBe('22px')
+      await window.emulateMedia({ reducedMotion: 'no-preference' })
+
       await window.getByTestId('workspace-sidebar-pin').click()
       await window.mouse.move(700, 80)
       await expect(sidebar).toHaveClass(/workspace-sidebar--rail/)
       await expect(navigation).toHaveCount(0)
       await expect(window.locator('.workspace-space-item')).toHaveCount(0)
       await expect(window.locator('.workspace-agent-item')).toHaveCount(0)
-      await expect.poll(async () => (await rect(sidebar)).width).toBeCloseTo(52, 0)
+      await expect.poll(async () => (await rect(sidebar)).width).toBeCloseTo(72, 0)
       const collapsedProject = await rect(project)
       expect(Math.abs(collapsedProject.x - dockedProject.x)).toBeLessThanOrEqual(1)
       expect(Math.abs(collapsedProject.y - dockedProject.y)).toBeLessThanOrEqual(1)
