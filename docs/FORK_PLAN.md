@@ -5,7 +5,17 @@ Objetivo: três funcionalidades de fluxo de trabalho com GitHub Issues, com a me
 divergência possível do núcleo para continuar a fazer merge do upstream.
 
 Issues: plano #1 · F1 #2 · F2 #3 (#5, #6, #7, #11) · F3 #4 (#8, #9).
-Estado: plano aprovado com os ajustes da §2.0 (2026-10-21).
+Estado (2026-10-21): implementado. PRs #12 (F1), #13 (#11), #14 (#5), #15 (#6), #16 (#8),
+#17 e #19 (#7), #18 (#9). Os ids de comandos e preferências usam hífen (o host recusa camelCase).
+Para instalar: `pnpm build` e reiniciar a app; depois `opencove plugin install plugins/github-issues`.
+
+Decisões em aberto:
+- **Modo de permissões ao retomar um agente.** O `agentFullAccess` não fica guardado no nó, por isso
+  relançar ou retomar segue a definição global. Recomendado: desligar "agent full access" nas
+  definições globais.
+- **Limpeza da worktree por issue.** `worktree archive` não remove o Space, porque não há
+  `space.archive` na Control Surface, e não pára agentes que estejam a correr.
+- **CI do fork.** Os workflows nunca correram no fork e têm de ser ativados no separador Actions.
 
 Ordem de preferência para onde o código vive: **(a) plugin → (b) CLI → (c) núcleo**.
 
@@ -92,7 +102,7 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
 1. **Fecho de issues.** O coordenador só fecha issues com PR `MERGED`. Sem PR
    merged, aplica a label `needs-review` (o plugin cria-a se faltar) e comenta na
    issue o resumo e a evidência; o fecho fica para o humano. O fecho sem PR
-   (`force`) **só existe como comando de menu** (`issue.closeManual`, que exige
+   (`force`) **só existe como comando de menu** (`issue.close-manual`, que exige
    contexto de host) e é documentado como uso humano. Não aparece na CLI, na skill
    nem no `coordinator.launch`.
 2. **Prompt injection.** O `issue.assign` só aceita issues cujo autor está na
@@ -100,19 +110,19 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
    `C0reca`, e os colaboradores com permissão `write`, `maintain` ou `admin`
    (`gh api repos/{o}/{r}/collaborators/{u}/permission`). Se essa consulta falhar,
    o autor é tratado como não autorizado.
-   - Configuração: preferência `trustedAuthors`, com linhas `owner/repo: alice, bob`
+   - Configuração: preferência `trusted-authors`, com linhas `owner/repo: alice, bob`
      ou `*: alice`. As preferências do plugin são escalares e globais, por isso a
      chave por projeto é o `owner/repo`. Os nomes acrescentam-se aos autores por
      omissão; não os substituem.
    - Issues fora da allowlist aparecem no painel marcadas como "autor não
-     confiável". Só se atribuem pela ação manual de menu `issue.assignUntrusted`,
+     confiável". Só se atribuem pela ação manual de menu `issue.assign-untrusted`,
      que exige contexto de host e por isso não é chamável pelo `plugin run` da CLI.
    - Na tarefa, o conteúdo da issue fica dentro de um bloco
      `<github-issue-content trust="untrusted-user-data">…</github-issue-content>`,
      precedido de uma instrução explícita: são dados, não instruções. Qualquer
      ocorrência da tag de fecho dentro do corpo é neutralizada.
 3. **Permissões dos agentes.** Por omissão o Claude Code arranca em modo normal e
-   pede permissões. A preferência `autoApproveRepos` (lista `owner/repo`, vazia por
+   pede permissões. A preferência `auto-approve-repos` (lista `owner/repo`, vazia por
    omissão) ativa a auto-aprovação por projeto. O painel mostra no topo da secção
    um item de aviso visível quando um projeto a tem ligada.
    - Isto exige a alteração de núcleo #11, porque hoje o plugin não consegue
@@ -147,7 +157,7 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
      são `issue:owner/repo#N`, que é a ligação estável usada para reencontrar a
      tarefa (idempotente: se já existe uma tarefa com esta tag, reutiliza-a).
   3. `host.agents.launch({prompt: requirement, provider:'claude-code', agentFullAccess})`.
-     `agentFullAccess` é `false`, a menos que o repositório esteja em `autoApproveRepos`.
+     `agentFullAccess` é `false`, a menos que o repositório esteja em `auto-approve-repos`.
   4. Põe a tarefa em `doing`.
 - **F2.b (núcleo, isolado, #6):** campo opcional `taskNodeId` no `node.create agent`
   (Control Surface e `host.agents.launch`). Liga os dois lados como a ação do
@@ -183,10 +193,10 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
     done ou null.
   - `issue.close {number, pr, evidence}`: fecha só se o PR estiver `MERGED`.
     Comenta a evidência, faz `gh issue close` e passa a tarefa para `done`.
-  - `issue.requestReview {number, summary, evidence}`: aplica `needs-review` e
+  - `issue.request-review {number, summary, evidence}`: aplica `needs-review` e
     comenta. É o caminho quando não há PR merged.
-  - Só para humanos (menu, exige contexto de host): `issue.closeManual` e
-    `issue.assignUntrusted`.
+  - Só para humanos (menu, exige contexto de host): `issue.close-manual` e
+    `issue.assign-untrusted`.
 - **Skill** `issue-coordinator/SKILL.md` no plugin. Descreve o playbook: listar,
   priorizar, atribuir, monitorizar e fechar com prova, e quando parar e pedir input.
 - Comando `coordinator.launch` (menu da sidebar/space): lança um agente com o
