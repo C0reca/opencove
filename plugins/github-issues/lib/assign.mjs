@@ -9,6 +9,7 @@ import {
 import { mapSeries, findSeries } from './sequence.mjs'
 import { runGh } from './runGh.mjs'
 import { composeRequirement, taskTag, taskTitle } from './requirement.mjs'
+import { createIssueWorktree, issueSpaceName, resolveRootSpace } from './worktree.mjs'
 import { normalizeLogin, normalizeRepo, permissionDecision, staticTrustReason } from './trust.mjs'
 
 export const DEFAULT_PROVIDER = 'claude-code'
@@ -94,10 +95,19 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
   }
 
   // skipTrustCheck is only ever true for the human menu action issue.assign-untrusted.
-  async function assign({ projectId, number, provider, policy, skipTrustCheck = false }) {
+  async function assign({
+    projectId,
+    number,
+    provider,
+    policy,
+    skipTrustCheck = false,
+    worktree,
+    parentSpaceId,
+  }) {
     const project = requireProjectId(projectId)
     const issueNumber = requireIssueNumber(number)
     const providerId = requireProvider(provider)
+    const worktreeFlag = requireWorktreeFlag(worktree)
     const repo = await repoOf(project)
     const issue = await viewIssue(project, issueNumber)
 
@@ -139,36 +149,69 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       }
     }
 
-    // The task and the agent must share a Space: a reused task keeps its own Space, and a new task
-    // lives on the project canvas (no spaceId).
-    const spaceId = existing ? existing.spaceId : null
-    const taskNodeId = existing
-      ? existing.id
-      : (
-          await host.nodes.create({
-            target: { projectId: project },
-            kind: 'task',
-            title,
-            data: { requirement, status: 'todo', tags: [tag] },
-          })
-        ).node.id
+    // Decision: an explicit `worktree` parameter wins; otherwise worktree-repos decides. A reused
+    // task keeps its own Space and never gets a second Space or worktree.
+    const useWorktree = worktreeFlag ?? policy.worktreeRepos.has(normalizeRepo(repo)) === true
+    let spaceId = existing ? existing.spaceId : null
+    let branch = null
+    if (!existing && useWorktree) {
+      const rootSpaceId = await resolveRootSpace(host, project, {
+        explicitParentSpaceId: requireParentSpaceId(parentSpaceId),
+      })
+      const made = await createIssueWorktree({
+        host,
+        projectId: project,
+        rootSpaceId,
+        name: issueSpaceName(issueNumber, issue.title),
+      })
+      spaceId = made.spaceId
+      branch = made.branch
+    }
 
-    // core #6: taskNodeId links agent and task and moves the task to doing in one step.
-    const launched = await host.agents.launch({
-      target: { projectId: project, ...(spaceId ? { spaceId } : {}) },
-      title,
-      prompt: requirement,
-      provider: providerId,
-      agentFullAccess,
-      taskNodeId,
-    })
-    return {
-      repo,
-      number: issueNumber,
-      taskNodeId,
-      agentNodeId: launched?.node?.id ?? null,
-      agentFullAccess,
-      reused: Boolean(existing),
+    // The task and the agent share a Space: a new worktree task lives in the child Space, a reused
+    // task keeps its Space, and any other new task lives on the project canvas.
+    const target = { projectId: project, ...(spaceId ? { spaceId } : {}) }
+    try {
+      const taskNodeId = existing
+        ? existing.id
+        : (
+            await host.nodes.create({
+              target,
+              kind: 'task',
+              title,
+              data: { requirement, status: 'todo', tags: [tag] },
+            })
+          ).node.id
+
+      // core #6: taskNodeId links agent and task and moves the task to doing in one step.
+      const launched = await host.agents.launch({
+        target,
+        title,
+        prompt: requirement,
+        provider: providerId,
+        agentFullAccess,
+        taskNodeId,
+      })
+      return {
+        repo,
+        number: issueNumber,
+        taskNodeId,
+        agentNodeId: launched?.node?.id ?? null,
+        agentFullAccess,
+        spaceId,
+        branch,
+        reused: Boolean(existing),
+      }
+    } catch (caught) {
+      // Partial failure: the Space and branch exist. Report them; nothing is deleted.
+      if (branch) {
+        throw commandError(
+          caught?.code ?? 'launch-failed',
+          `${messageOf(caught)} The Space ${spaceId} and branch ${branch} were created and are kept; remove them manually if they are not wanted.`,
+          { ...(caught?.details ?? {}), spaceId, branch },
+        )
+      }
+      throw caught
     }
   }
 
@@ -185,6 +228,31 @@ function requireProjectId(value) {
 function requireIssueNumber(value) {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw commandError('invalid-params', 'number must be a positive integer')
+  }
+  return value
+}
+
+// Optional explicit root Space for worktrees; only used when a worktree is created.
+function requireParentSpaceId(value) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
+    throw commandError(
+      'invalid-params',
+      'parentSpaceId must be a non-empty string of at most 200 characters',
+    )
+  }
+  return value
+}
+
+// undefined means "use the worktree-repos preference"; any present value must be a boolean.
+function requireWorktreeFlag(value) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  if (typeof value !== 'boolean') {
+    throw commandError('invalid-params', 'worktree must be true or false')
   }
   return value
 }

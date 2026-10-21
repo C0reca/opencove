@@ -37,8 +37,11 @@ Use exactly these command ids: `issues.list`, `issue.assign`, `agents.status`, `
    `needs-review`, because a human owns it now. Take the rest in list order, and only while under
    the limit in section 2.
 4. Assign each pick: `opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":<N>}'`.
-   The result has `taskNodeId`, `agentNodeId` and `reused`. If it returns `untrusted-author`, stop
+   The result has `taskNodeId`, `agentNodeId`, `reused`, `spaceId` and `branch`. If it returns `untrusted-author`, stop
    for that issue and ask the human. Do not retry it and do not change its author check.
+   Add `"worktree":true` to the params only when the human asked for a worktree per issue. Otherwise
+   leave it out. If a worktree call fails with `cli-missing`, `parent_missing_rect` or `branch-exists`,
+   stop and ask the human. Any Space or branch named in an error is not yours to remove.
 5. For each row, decide the next step:
    - `agentState` `waiting`: read a waiting agent's last output with `agents.read`:
      `opencove plugin run github-issues agents.read --params '{"projectId":"<id>","nodeId":"<agentNodeId>"}'`.

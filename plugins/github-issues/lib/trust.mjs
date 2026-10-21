@@ -60,6 +60,7 @@ export function readTrustPolicy(preferences) {
   return {
     trustedAuthors: parseTrustedAuthors(preferences?.['trusted-authors']),
     autoApproveRepos: parseRepoList(preferences?.['auto-approve-repos']),
+    worktreeRepos: parseRepoList(preferences?.['worktree-repos']),
   }
 }
 
