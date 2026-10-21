@@ -1,0 +1,37 @@
+{
+  "apiVersion": 1,
+  "id": "github-issues",
+  "version": "0.1.0",
+  "displayName": "GitHub Issues",
+  "description": "Shows open GitHub issues of each project's repository in the Sidebar, using the local gh CLI.",
+  "author": "C0reca",
+  "main": "main.mjs",
+  "readme": "README.md",
+  "contributes": {
+    "sidebar": [{ "id": "issues", "title": "Issues", "itemsCommand": "issues.sidebar" }],
+    "commands": [
+      {
+        "id": "issues.list",
+        "title": "List open issues",
+        "description": "Lists open issues for one project (projectId) or for every project, grouped by repository. Pass refresh: true to bypass the 60 s cache.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"refresh\":true}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "issues.sidebar",
+        "title": "Read project issues",
+        "description": "Sidebar items for one project's open issues.",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "issues.refresh",
+        "title": "Refresh issues",
+        "description": "Clears the cache for a project's repository and reads its open issues again.",
+        "target": "plugin",
+        "menus": ["sidebar"]
+      }
+    ]
+  }
+}
