@@ -71,12 +71,13 @@ describe('github-issues issue.assign', () => {
     })
     expect(String(fake.launches[0].prompt)).toContain('Fixes #5')
     expect(String(fake.launches[0].prompt)).toContain('&lt;/github-issue-content')
-    expect(fake.updates).toEqual([
-      expect.objectContaining({
-        nodeId: fake.created[0].id,
-        data: expect.objectContaining({ status: 'doing' }),
-      }),
-    ])
+    // core #6 links the task and moves it to doing inside agents.launch; no separate status write.
+    expect(fake.launches[0].taskNodeId).toBe(fake.created[0].id)
+    expect(fake.updates).toEqual([])
+    expect(fake.nodes.get(fake.created[0].id)?.data).toMatchObject({
+      status: 'doing',
+      linkedAgentNodeId: result.agentNodeId,
+    })
     expect(result).toEqual({
       repo: 'C0reca/opencove',
       number: 5,
@@ -206,6 +207,28 @@ describe('github-issues issue.assign', () => {
       agentNodeId: null,
       agentFullAccess: null,
       reused: true,
+    })
+  })
+
+  it('launches a reused task inside the Space the task lives in', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [
+        {
+          id: 'task-s',
+          kind: 'task',
+          title: '#5 Login bug',
+          spaceId: 'space-1',
+          data: { kind: 'task', tags: ['issue:c0reca/opencove#5'], status: 'todo' },
+        },
+      ],
+    })
+
+    await runAssign(fake, PARAMS)
+
+    expect(fake.launches[0]).toMatchObject({
+      target: { projectId: 'p1', spaceId: 'space-1' },
+      taskNodeId: 'task-s',
     })
   })
 

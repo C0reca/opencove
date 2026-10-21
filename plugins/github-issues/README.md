@@ -29,6 +29,9 @@ other projects still load.
 | `issues.sidebar` | `projectId` | Sidebar items for one project. Used by the Sidebar section. |
 | `issues.refresh` | `projectId` | Clears that project's cache and reads again. Sidebar action. |
 | `issue.assign` | `projectId`, `number`, `provider?` | Creates (or reuses) a task for one trusted issue and launches an agent on it. Sidebar action on trusted issues. |
+| `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState }`. Returned as `{ issues: [...] }`. |
+| `issue.close` | `projectId`, `number`, `pr`, `evidence?` | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`. |
+| `issue.request-review` | `projectId`, `number`, `summary`, `evidence` | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes. |
 
 `issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, agentFullAccess, reused }`.
 Example: `pnpm opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":5}'`.
@@ -50,8 +53,8 @@ Sidebar **Refresh issues** item to bypass the cache.
 2. Checks the author is trusted (see below). An untrusted author is refused and nothing is written.
 3. Creates a task titled `#N <title>` tagged `issue:owner/repo#N`. If a task with that tag exists,
    it is reused and no second task is created.
-4. Launches an agent with `provider` (default `claude-code`) and the task requirement, then sets the
-   task to `doing`.
+4. Launches an agent with `provider` (default `claude-code`) and the task requirement, passing
+   `taskNodeId`. Core #6 links the agent and task and moves the task to `doing`, in the task's Space.
 
 The requirement asks the agent to open a PR whose body contains `Fixes #N`. The issue title and
 body go inside `<github-issue-content trust="untrusted-user-data">…</github-issue-content>`, after
@@ -105,6 +108,45 @@ These checks are application guards, not a security boundary. An agent with shel
 safeguard is running agents in normal mode, where you approve each shell command. Do not enable
 `auto-approve-repos` for a repository you would not let an agent change without review.
 
+## Coordinator commands
+
+These commands let a coordinating agent follow the issue tasks it created. They run with
+`opencove plugin run github-issues <command> --params '…'`.
+
+**`agents.status`** reads every task whose tag is `issue:owner/repo#N` and finds its agent:
+
+- `agentState` comes from `host.agents.get`: `working`, `waiting`, `done`, or `null` when unknown.
+  It is an observation, not proof that the work is finished. Never close an issue on it.
+- `runtimeStatus` is the agent node's status in the canvas.
+- The agent comes from the task's stored link, `linkedAgentNodeId`, which core #6 sets when the
+  agent is launched with `taskNodeId`.
+- Legacy fallback: a task created before #6 has no stored link. For those only, an agent matches
+  when its prompt is the issue requirement or its title is the task title; the last match wins.
+  Remove this fallback once no unlinked issue task remains.
+
+**`issue.close`** closes only on evidence. It refuses, with no writes, when:
+
+- the PR cannot be read: `pr-not-found`;
+- the PR is not `MERGED`: `pr-not-merged`;
+- the merged PR does not declare that it closes this issue (no `Fixes #N`): `pr-not-linked`.
+  Refusing here keeps the evidence about the right change.
+
+There is no `force` parameter. Without a merged PR, use `issue.request-review`.
+
+**`issue.request-review`** is the path when no PR is merged. The label creation uses `--force`, so
+repeated calls are safe. The issue stays open for a person to decide.
+
+Every gh call uses an argument list, not a shell string. Evidence and summary text is written as
+one argument and is never combined with issue content from GitHub.
+
+### Human-only actions
+
+`issue.close-manual` closes an issue **without** a pull request. It needs host context, so the
+CLI rejects it with `human-only`. It is declared as a Sidebar menu action, but no Sidebar item
+invokes it yet. Use it only from a menu, after reading the issue yourself. It records the reason in the closing comment.
+
+Like `issue.assign-untrusted`, it is not in the CLI usage text.
+
 ## Files
 
 | File | Purpose |
@@ -120,8 +162,12 @@ safeguard is running agents in normal mode, where you approve each shell command
 | `lib/requirement.mjs` | Task tag, title and requirement text with the untrusted block (pure) |
 | `lib/assign.mjs` | `issue.assign`: trust check, idempotent task lookup, launch |
 | `lib/errors.mjs` | Coded command errors |
+| `lib/params.mjs` | Shared parameter validation (pure) |
+| `lib/tasks.mjs` | Task lookups by issue tag and status writes |
+| `lib/status.mjs` | `agents.status` shaping and the agent-to-task fallback |
+| `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
 
 Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`.
 
 Not yet: opening an issue from the Sidebar (the Sidebar API has no way to open a
-URL), linking the task to its agent node (#6), and closing issues.
+URL), linking the task to its agent node (#6), and a Sidebar item for `issue.close-manual`.

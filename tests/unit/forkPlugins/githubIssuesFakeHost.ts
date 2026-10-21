@@ -7,19 +7,37 @@ export interface FakeNode {
   id: string
   kind: string
   title: string
-  data: { kind: string; tags?: string[]; status?: string; linkedAgentNodeId?: string | null }
+  spaceId?: string | null
+  status?: string
+  data: {
+    kind: string
+    tags?: string[]
+    status?: string
+    linkedAgentNodeId?: string | null
+    requirement?: string
+    prompt?: string
+    taskId?: string | null
+  }
 }
 
 export interface FakeHostOptions {
   gh: (args: string[]) => GhReply
   prefs?: Record<string, string>
   nodes?: FakeNode[]
+  agentStates?: Record<string, string>
+  projects?: string[]
 }
 
 export const ok = (output: string): GhReply => ({ status: 'completed', exitCode: 0, output })
 export const failed = (error: string): GhReply => ({ status: 'completed', exitCode: 1, error })
 
-export function createFakeHost({ gh, prefs = {}, nodes: seeded = [] }: FakeHostOptions) {
+export function createFakeHost({
+  gh,
+  prefs = {},
+  nodes: seeded = [],
+  agentStates = {},
+  projects = ['p1'],
+}: FakeHostOptions) {
   const ghCalls: string[][] = []
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
@@ -30,7 +48,7 @@ export function createFakeHost({ gh, prefs = {}, nodes: seeded = [] }: FakeHostO
 
   const host = {
     target: {
-      list: async () => ({ projects: [{ id: 'p1', name: 'p1', spaces: [] }] }),
+      list: async () => ({ projects: projects.map(id => ({ id, name: id, spaces: [] })) }),
     },
     operations: {
       start: async ({ args }: { args: string[] }) => {
@@ -79,9 +97,30 @@ export function createFakeHost({ gh, prefs = {}, nodes: seeded = [] }: FakeHostO
       },
     },
     agents: {
+      // Mirrors core #6: taskNodeId links both sides and moves the task to doing. The task must
+      // exist, be a task, and be in the same Space as the launch target.
       launch: async (input: Record<string, unknown>) => {
         launches.push(input)
-        return { node: { id: `agent-${++sequence}` } }
+        const agentId = `agent-${++sequence}`
+        const taskNodeId = input.taskNodeId as string | undefined
+        if (taskNodeId !== undefined) {
+          const task = nodes.get(taskNodeId)
+          const target = input.target as { spaceId?: string }
+          if (!task || task.kind !== 'task') {
+            throw new Error(`no task ${taskNodeId}`)
+          }
+          if ((task.spaceId ?? undefined) !== (target.spaceId ?? undefined)) {
+            throw new Error('task is in another Space')
+          }
+          task.data = { ...task.data, status: 'doing', linkedAgentNodeId: agentId }
+        }
+        return { node: { id: agentId } }
+      },
+      get: async ({ nodeId }: { nodeId: string }) => {
+        if (!nodes.has(nodeId)) {
+          throw new Error(`no agent ${nodeId}`)
+        }
+        return { node: nodes.get(nodeId), session: null, agentState: agentStates[nodeId] ?? null }
       },
     },
     preferences: {

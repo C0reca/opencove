@@ -99,6 +99,44 @@ export function parseCollaboratorPermission(text) {
   return permission
 }
 
+export const NEEDS_REVIEW_LABEL = 'needs-review'
+
+export function prViewArgs(pr) {
+  return ['pr', 'view', String(pr), '--json', 'state,closingIssuesReferences,url']
+}
+
+// `closes` lists the issue numbers the PR declares it closes (Fixes #N / Closes #N).
+export function parsePrView(text) {
+  const raw = extractJson(text)
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('gh pr view did not return a pull request')
+  }
+  const references = Array.isArray(raw.closingIssuesReferences) ? raw.closingIssuesReferences : []
+  return {
+    state: typeof raw.state === 'string' ? raw.state.toUpperCase() : '',
+    url: typeof raw.url === 'string' ? raw.url : '',
+    closes: references.map(reference => reference?.number).filter(Number.isInteger),
+  }
+}
+
+export function issueCloseArgs(number) {
+  return ['issue', 'close', String(number)]
+}
+
+// The body is one argv element, never a shell string.
+export function issueCommentArgs(number, body) {
+  return ['issue', 'comment', String(number), '--body', body]
+}
+
+export function issueAddLabelArgs(number, label) {
+  return ['issue', 'edit', String(number), '--add-label', label]
+}
+
+// --force makes creation idempotent: an existing label is updated instead of failing.
+export function labelCreateArgs(label, description) {
+  return ['label', 'create', label, '--color', 'FBCA04', '--description', description, '--force']
+}
+
 const MESSAGES = {
   'gh-missing':
     'GitHub CLI (gh) is not installed on this machine. Install it from https://cli.github.com/.',
