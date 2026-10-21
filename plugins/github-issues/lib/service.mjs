@@ -1,8 +1,14 @@
 import { createTtlCache } from './cache.mjs'
 import { commandError } from './errors.mjs'
-import { issueListArgs, parseIssueList, parseRepoView, REPO_VIEW_ARGS } from './gh.mjs'
+import {
+  classifyGhFailure,
+  GIT_REMOTE_ARGS,
+  issueListArgs,
+  parseGitRemotes,
+  parseIssueList,
+} from './gh.mjs'
 import { buildReport, groupLookupsByRepo } from './report.mjs'
-import { runGh } from './runGh.mjs'
+import { runGh, runPlain } from './runGh.mjs'
 
 // Reads GitHub issues through gh for one or many projects. Host calls run one at a time because
 // the host admits only a few concurrent operations per owner; the 60 s caches keep reads cheap.
@@ -16,17 +22,13 @@ export function createIssueService({ host, ttlMs, now }) {
       return cached
     }
 
-    const result = await runGh(host, { projectId }, REPO_VIEW_ARGS)
-    let lookup
-    if (!result.ok) {
-      lookup = { projectId, repo: null, error: result.error }
-    } else {
-      try {
-        lookup = { projectId, repo: parseRepoView(result.output), error: null }
-      } catch (caught) {
-        lookup = { projectId, repo: null, error: { code: 'gh-failed', message: messageOf(caught) } }
-      }
-    }
+    // The repository comes from the project's git remotes (origin first), never from gh's
+    // own base-repository guess, so every later gh call can pass an explicit --repo.
+    const result = await runPlain(host, { projectId }, 'git', GIT_REMOTE_ARGS)
+    const repo = result.ok ? parseGitRemotes(result.output) : null
+    const lookup = repo
+      ? { projectId, repo, error: null }
+      : { projectId, repo: null, error: remoteFailure(result) }
     repoCache.set(projectId, lookup)
     return lookup
   }
@@ -38,7 +40,7 @@ export function createIssueService({ host, ttlMs, now }) {
       return { ok: true, issues: cached }
     }
 
-    const result = await runGh(host, { projectId }, issueListArgs())
+    const result = await runGh(host, { projectId }, issueListArgs(), { repo })
     if (!result.ok) {
       return result
     }
@@ -89,6 +91,14 @@ function mapSeries(items, mapper) {
     done.push(await mapper(item))
     return done
   }, Promise.resolve([]))
+}
+
+// A readable remote list without a GitHub remote, or a non-repository directory, is not-github.
+function remoteFailure(result) {
+  if (result.ok || /not a git repository/i.test(String(result.error?.message ?? ''))) {
+    return classifyGhFailure({ output: 'not a git repository' })
+  }
+  return result.error
 }
 
 function messageOf(caught) {

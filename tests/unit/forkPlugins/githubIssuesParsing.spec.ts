@@ -3,8 +3,12 @@ import {
   classifyGhFailure,
   extractJson,
   issueListArgs,
+  cleanTerminalOutput,
+  githubRepoFromUrl,
+  parseGitRemotes,
   parseIssueList,
-  parseRepoView,
+  redactSecrets,
+  withRepo,
 } from '../../../plugins/github-issues/lib/gh.mjs'
 import { createTtlCache } from '../../../plugins/github-issues/lib/cache.mjs'
 import {
@@ -65,10 +69,19 @@ describe('github-issues gh parsing', () => {
     expect(extractJson(text)).toEqual([{ number: 3, title: 't' }])
   })
 
-  it('parses owner/name from gh repo view and rejects malformed values', () => {
-    expect(parseRepoView('{"nameWithOwner":"C0reca/opencove"}')).toBe('C0reca/opencove')
-    expect(() => parseRepoView('{"nameWithOwner":"just-a-name"}')).toThrow()
-    expect(() => parseRepoView('{}')).toThrow()
+  it('resolves the GitHub repository from git remotes, preferring origin', () => {
+    const output = [
+      'upstream\thttps://github.com/DeadWaveWave/opencove.git (fetch)',
+      'upstream\thttps://github.com/DeadWaveWave/opencove.git (push)',
+      'origin\tgit@github.com:C0reca/opencove.git (fetch)',
+      'origin\tgit@github.com:C0reca/opencove.git (push)',
+    ].join('\r\n')
+    expect(parseGitRemotes(output)).toBe('C0reca/opencove')
+    expect(parseGitRemotes('mirror\thttps://github.com/o/r (fetch)\n')).toBe('o/r')
+    expect(parseGitRemotes('origin\thttps://gitlab.com/o/r.git (fetch)\n')).toBeNull()
+    expect(parseGitRemotes('')).toBeNull()
+    expect(githubRepoFromUrl('ssh://git@github.com/o/r.git')).toBe('o/r')
+    expect(githubRepoFromUrl('https://github.com/o/r.js/')).toBe('o/r.js')
   })
 
   it('classifies missing gh, missing auth and non-GitHub projects', () => {
@@ -99,7 +112,40 @@ describe('github-issues gh parsing', () => {
     })
     expect(failure.code).toBe('gh-failed')
     expect(failure.message.startsWith('gh failed (exit 2): boom')).toBe(true)
-    expect(failure.message.length).toBeLessThanOrEqual(300)
+    expect(failure.message.length).toBeLessThanOrEqual(500)
+  })
+
+  // Regression for #22: gh inside a host PTY coloured its JSON and queried the terminal.
+  it('parses gh JSON captured from a PTY with colours, terminal queries and CRLF', () => {
+    const pty =
+      '\u001b]11;?\u001b\\\u001b[6n\u001b]11;?\u001b\\\u001b[6n\u001b[1;37m{\u001b[m\r\n' +
+      '  \u001b[1;34m"nameWithOwner"\u001b[m\u001b[1;37m:\u001b[m \u001b[32m"C0reca/opencove"\u001b[m\r\n' +
+      '\u001b[1;37m}\u001b[m\r\n'
+    expect(extractJson(pty)).toEqual({ nameWithOwner: 'C0reca/opencove' })
+    expect(cleanTerminalOutput('a\u001b[31mb\u001b[0m\r\n')).toBe('ab\n')
+  })
+
+  it('explains a non-JSON reply with its first lines and never leaks tokens', () => {
+    expect(() => extractJson('error: token ghp_abcdefghijklmnopqrstuvwxyz0123\nmore\n')).toThrow(
+      'gh did not return JSON: error: token [redacted] | more',
+    )
+    expect(() => extractJson('')).toThrow('gh did not return JSON (empty output)')
+    expect(redactSecrets('Authorization: Bearer abc github_pat_' + 'x'.repeat(30))).not.toMatch(
+      /abc|github_pat_x/,
+    )
+    const failure = classifyGhFailure({
+      status: 'completed',
+      exitCode: 1,
+      output: 'HTTP 404\r\nNot Found',
+    })
+    expect(failure.message).toBe('gh failed (exit 1): HTTP 404 | Not Found')
+  })
+
+  it('adds an explicit --repo only to repository-scoped gh commands', () => {
+    expect(withRepo(['issue', 'list'], 'o/r')).toEqual(['issue', 'list', '--repo', 'o/r'])
+    expect(withRepo(['pr', 'view', '1'], 'o/r')).toEqual(['pr', 'view', '1', '--repo', 'o/r'])
+    expect(withRepo(['api', 'repos/o/r'], 'o/r')).toEqual(['api', 'repos/o/r'])
+    expect(withRepo(['issue', 'list'], undefined)).toEqual(['issue', 'list'])
   })
 })
 

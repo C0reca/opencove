@@ -1,5 +1,6 @@
-import { classifyGhFailure } from './gh.mjs'
+import { classifyGhFailure, cleanTerminalOutput, GH_ENV, withRepo } from './gh.mjs'
 import { commandError } from './errors.mjs'
+import { findSeries } from './sequence.mjs'
 
 const TERMINAL = new Set(['completed', 'cancelled', 'failed'])
 const POLL_MS = 500
@@ -48,9 +49,56 @@ export async function runProcess(
   }
 }
 
-// Runs `gh <args>` (the GitHub CLI's failure classes).
-export function runGh(host, target, args, options = {}) {
-  return runProcess(host, target, 'gh', args, options)
+export const ENV_COMMAND = '/usr/bin/env'
+// Tried in order after the login shell's answer; the bare name falls back to the PTY's PATH.
+export const GH_CANDIDATES = Object.freeze(['/opt/homebrew/bin/gh', '/usr/local/bin/gh', 'gh'])
+
+// Resolved gh path per project. Only successes are cached, so installing gh later works.
+const ghPaths = new Map()
+
+export function resetGhPathCache() {
+  ghPaths.clear()
+}
+
+// Runs `program <args>` through /usr/bin/env with the non-interactive gh environment.
+export function runPlain(host, target, program, args, options = {}) {
+  return runProcess(host, target, ENV_COMMAND, [...GH_ENV, program, ...args], {
+    label: program,
+    ...options,
+  })
+}
+
+// ponytail: assumes a POSIX target (/usr/bin/env, sh -l); Windows targets need a cmd launcher.
+async function resolveGhPath(host, target) {
+  const key = target?.projectId ?? ''
+  if (ghPaths.has(key)) {
+    return ghPaths.get(key)
+  }
+  // The login shell's PATH sees Homebrew and user installs that a GUI-started app may miss.
+  const shell = await runPlain(host, target, '/bin/sh', ['-lc', 'command -v gh'])
+  const fromShell = shell.ok
+    ? cleanTerminalOutput(shell.output)
+        .split('\n')
+        .map(line => line.trim())
+        .find(line => line.startsWith('/'))
+    : undefined
+  const candidates = [...new Set([fromShell, ...GH_CANDIDATES].filter(Boolean))]
+  const found = await findSeries(candidates, async candidate =>
+    (await runPlain(host, target, candidate, ['--version'])).ok ? candidate : null,
+  )
+  if (found) {
+    ghPaths.set(key, found)
+  }
+  return found ?? null
+}
+
+// Runs `gh <args>` with an explicit --repo (when given), no prompts, colours or pager.
+export async function runGh(host, target, args, { repo, ...options } = {}) {
+  const gh = await resolveGhPath(host, target)
+  if (!gh) {
+    return { ok: false, error: classifyGhFailure({ status: 'failed', exitCode: 127 }) }
+  }
+  return runPlain(host, target, gh, withRepo(args, repo), { label: 'gh', ...options })
 }
 
 // For writes: returns the output, or throws the coded gh failure.

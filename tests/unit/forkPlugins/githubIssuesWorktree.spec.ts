@@ -9,7 +9,7 @@ import {
   slugify,
   SLUG_MAX_CHARS,
 } from '../../../plugins/github-issues/lib/worktree.mjs'
-import { createFakeHost, failed, ok, type GhReply } from './githubIssuesFakeHost'
+import { createFakeHost, failed, ok, remotes, type GhReply } from './githubIssuesFakeHost'
 
 const ISSUE_JSON = JSON.stringify({
   number: 5,
@@ -54,8 +54,8 @@ function spaceListReply(list: unknown[]): GhReply {
 
 function gh(args: string[]): GhReply {
   const line = args.join(' ')
-  if (line === 'repo view --json nameWithOwner') {
-    return ok('{"nameWithOwner":"C0reca/opencove"}')
+  if (line === 'remote -v') {
+    return ok(remotes('C0reca/opencove'))
   }
   if (line.startsWith('issue view 5 ')) {
     return ok(ISSUE_JSON)

@@ -16,8 +16,8 @@ import { listTaskNodes, setTaskStatus } from './tasks.mjs'
 import { taskTag } from './requirement.mjs'
 
 export function createClosingService({ host, repoOf }) {
-  async function viewPull(projectId, pr) {
-    const result = await runGh(host, { projectId }, prViewArgs(pr))
+  async function viewPull(projectId, repo, pr) {
+    const result = await runGh(host, { projectId }, prViewArgs(pr), { repo })
     if (!result.ok) {
       const missing = /could not resolve|not found|no pull request/i.test(result.error.message)
       throw commandError(
@@ -50,8 +50,8 @@ export function createClosingService({ host, repoOf }) {
 
   async function closeWithComment({ projectId, repo, number, comment }) {
     const target = { projectId }
-    await runGhOrThrow(host, target, issueCommentArgs(number, comment))
-    await runGhOrThrow(host, target, issueCloseArgs(number))
+    await runGhOrThrow(host, target, issueCommentArgs(number, comment), { repo })
+    await runGhOrThrow(host, target, issueCloseArgs(number), { repo })
     return markTaskDone(projectId, repo, number)
   }
 
@@ -62,7 +62,7 @@ export function createClosingService({ host, repoOf }) {
     const prNumber = requirePositiveInt(pr, 'pr')
     const note = optionalText(evidence, 'evidence')
     const repo = await repoOf(project)
-    const pull = await viewPull(project, prNumber)
+    const pull = await viewPull(project, repo, prNumber)
 
     if (pull.state !== 'MERGED') {
       throw commandError(
@@ -109,12 +109,14 @@ export function createClosingService({ host, repoOf }) {
       host,
       target,
       labelCreateArgs(NEEDS_REVIEW_LABEL, 'Needs a human decision before this issue is closed'),
+      { repo },
     )
-    await runGhOrThrow(host, target, issueAddLabelArgs(issueNumber, NEEDS_REVIEW_LABEL))
+    await runGhOrThrow(host, target, issueAddLabelArgs(issueNumber, NEEDS_REVIEW_LABEL), { repo })
     await runGhOrThrow(
       host,
       target,
       issueCommentArgs(issueNumber, `Review requested.\n\nSummary: ${text}\n\nEvidence: ${proof}`),
+      { repo },
     )
     return { repo, number: issueNumber, label: NEEDS_REVIEW_LABEL, closed: false }
   }

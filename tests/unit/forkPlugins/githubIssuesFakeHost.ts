@@ -33,6 +33,44 @@ export interface FakeHostOptions {
 }
 
 export const ok = (output: string): GhReply => ({ status: 'completed', exitCode: 0, output })
+
+// `git remote -v` output for a GitHub origin.
+export const remotes = (repo: string): string =>
+  `origin\tgit@github.com:${repo}.git (fetch)\norigin\tgit@github.com:${repo}.git (push)\n`
+
+export interface Launch {
+  program: string
+  args: string[]
+  env: string[]
+  repo: string | null
+  reply?: GhReply
+}
+
+// Unwraps the plugin's `/usr/bin/env VAR=... <program> args` launcher. gh's `--repo X` suffix is
+// recorded separately so tests keep matching the plain gh arguments; the login-shell lookup and
+// `gh --version` probes answer as an installed gh.
+export function unwrapLaunch(command: string, args: string[]): Launch {
+  if (command !== '/usr/bin/env') {
+    return { program: command, args, env: [], repo: null }
+  }
+  const start = args.findIndex(arg => !/^[A-Z_]+=/.test(arg))
+  const env = args.slice(0, start)
+  const program = args[start] ?? ''
+  const rest = args.slice(start + 1)
+  if (program === '/bin/sh') {
+    return { program, args: rest, env, repo: null, reply: ok('/opt/homebrew/bin/gh\n') }
+  }
+  if (program.endsWith('/gh') || program === 'gh') {
+    if (rest[0] === '--version') {
+      return { program: 'gh-probe', args: rest, env, repo: null, reply: ok('gh version 2') }
+    }
+    const at = rest.indexOf('--repo')
+    const repo = at >= 0 ? (rest[at + 1] ?? null) : null
+    const plain = at >= 0 ? [...rest.slice(0, at), ...rest.slice(at + 2)] : rest
+    return { program: 'gh', args: plain, env, repo }
+  }
+  return { program, args: rest, env, repo: null }
+}
 export const failed = (error: string): GhReply => ({ status: 'completed', exitCode: 1, error })
 
 export function createFakeHost({
@@ -49,6 +87,7 @@ export function createFakeHost({
   const reads: string[] = []
   const processCalls: Array<{ command: string; args: string[] }> = []
   const ghCalls: string[][] = []
+  const rawGhCalls: Launch[] = []
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
   const updates: Array<{ nodeId: string; data: Record<string, unknown> }> = []
@@ -64,13 +103,20 @@ export function createFakeHost({
     },
     operations: {
       start: async ({ command, args }: { command?: string; args: string[] }) => {
-        if (command === 'opencove') {
-          processCalls.push({ command, args })
+        const launch = unwrapLaunch(command ?? 'gh', args)
+        let reply: GhReply
+        if (launch.program === 'opencove') {
+          processCalls.push({ command: launch.program, args: launch.args })
+          reply = gh(launch.args, 'opencove')
+        } else if (launch.program === 'gh') {
+          rawGhCalls.push(launch)
+          ghCalls.push(launch.args)
+          reply = gh(launch.args, 'gh')
         } else {
-          ghCalls.push(args)
+          reply = launch.reply ?? gh(launch.args, launch.program)
         }
         const operationId = `op-${++sequence}`
-        operations.set(operationId, gh(args, command ?? 'gh'))
+        operations.set(operationId, reply)
         return { operationId, status: 'running' }
       },
       get: async ({ operationId }: { operationId: string }) => {
@@ -174,5 +220,5 @@ export function createFakeHost({
     },
   }
 
-  return { host, ghCalls, processCalls, launches, created, updates, nodes, reads }
+  return { host, ghCalls, rawGhCalls, processCalls, launches, created, updates, nodes, reads }
 }
