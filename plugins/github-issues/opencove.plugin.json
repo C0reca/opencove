@@ -46,6 +46,37 @@
         "description": "Human-only Sidebar action: assigns an issue whose author is not trusted. Needs host context, so it cannot run from the CLI.",
         "target": "plugin",
         "menus": ["sidebar"]
+      },
+      {
+        "id": "agents.status",
+        "title": "Read agent status",
+        "description": "Lists issue tasks (tag issue:owner/repo#N) with their task status, linked agent, runtime status and observed agent state (working, waiting, done or null). Pass projectId to limit to one project.",
+        "usage": "--params '{\"projectId\":\"<id>\"}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "issue.close",
+        "title": "Close issue with merged PR",
+        "description": "Closes an issue only when the given PR is MERGED and declares it closes this issue. Comments the PR URL and optional evidence, then marks the task done. There is no force option.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"pr\":12,\"evidence\":\"tests pass\"}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "issue.request-review",
+        "title": "Request human review",
+        "description": "Adds the needs-review label (created if missing) and comments the summary and evidence. Never closes the issue.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"summary\":\"...\",\"evidence\":\"...\"}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "issue.close-manual",
+        "title": "Close issue without PR (human)",
+        "description": "Human-only Sidebar action: closes an issue without a pull request, recording the reason in a comment. Needs host context, so it cannot run from the CLI.",
+        "target": "plugin",
+        "menus": ["sidebar"]
       }
     ],
     "preferences": [

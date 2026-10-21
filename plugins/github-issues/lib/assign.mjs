@@ -87,7 +87,7 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       const data = (await host.nodes.get({ nodeId: node.id }))?.node?.data
       const tags = Array.isArray(data?.tags) ? data.tags : []
       if (data?.kind === 'task' && tags.some(value => String(value).toLowerCase() === tag)) {
-        return { id: node.id, data }
+        return { id: node.id, data, spaceId: node.spaceId ?? null }
       }
       return null
     })
@@ -139,6 +139,9 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       }
     }
 
+    // The task and the agent must share a Space: a reused task keeps its own Space, and a new task
+    // lives on the project canvas (no spaceId).
+    const spaceId = existing ? existing.spaceId : null
     const taskNodeId = existing
       ? existing.id
       : (
@@ -150,21 +153,15 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
           })
         ).node.id
 
+    // core #6: taskNodeId links agent and task and moves the task to doing in one step.
     const launched = await host.agents.launch({
-      target: { projectId: project },
+      target: { projectId: project, ...(spaceId ? { spaceId } : {}) },
       title,
       prompt: requirement,
       provider: providerId,
       agentFullAccess,
+      taskNodeId,
     })
-
-    await host.nodes.update({
-      nodeId: taskNodeId,
-      kind: 'task',
-      data: { requirement, status: 'doing', tags: [tag] },
-    })
-    // ponytail: #6 will link task and agent both ways here (data.linkedAgentNodeId). Until then the
-    // agent id is only returned to the caller, not stored on the task.
     return {
       repo,
       number: issueNumber,

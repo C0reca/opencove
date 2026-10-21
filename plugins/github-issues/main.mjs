@@ -1,5 +1,7 @@
 import { createAssignService } from './lib/assign.mjs'
+import { createClosingService } from './lib/closing.mjs'
 import { commandError } from './lib/errors.mjs'
+import { collectAgentStatus } from './lib/status.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { normalizeLogin, normalizeRepo, readTrustPolicy } from './lib/trust.mjs'
@@ -9,6 +11,7 @@ export async function activate(context) {
   const host = context.host
   const service = createIssueService({ host })
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
+  const closing = createClosingService({ host, repoOf: service.repoForProject })
 
   return {
     async runCommand(commandId, rawParams, commandContext) {
@@ -37,6 +40,37 @@ export async function activate(context) {
             )
           }
           return assignIssue({ params, projectId, commandContext, skipTrustCheck: true })
+        case 'agents.status': {
+          const projectIds = projectId ? [projectId] : await allProjectIds()
+          return { issues: await collectAgentStatus(host, projectIds) }
+        }
+        case 'issue.close':
+          return closing.close({
+            projectId,
+            number: params.number,
+            pr: params.pr,
+            evidence: params.evidence,
+          })
+        case 'issue.request-review':
+          return closing.requestReview({
+            projectId,
+            number: params.number,
+            summary: params.summary,
+            evidence: params.evidence,
+          })
+        case 'issue.close-manual':
+          // Human-only: same guard as issue.assign-untrusted.
+          if (!commandContext?.host) {
+            throw commandError(
+              'human-only',
+              'issue.close-manual is a Sidebar menu action; it cannot run from the CLI.',
+            )
+          }
+          return closing.closeManual({
+            projectId,
+            number: params.number,
+            reason: params.reason,
+          })
         default:
           throw new Error(`Unknown command: ${commandId}`)
       }
@@ -44,6 +78,11 @@ export async function activate(context) {
     async dispose() {
       context.log('GitHub Issues stopped')
     },
+  }
+
+  async function allProjectIds() {
+    const catalog = await host.target.list()
+    return (catalog.projects ?? []).map(project => project.id)
   }
 
   async function preferencesOf(commandContext) {

@@ -1,4 +1,5 @@
 import { classifyGhFailure } from './gh.mjs'
+import { commandError } from './errors.mjs'
 
 const TERMINAL = new Set(['completed', 'cancelled', 'failed'])
 const POLL_MS = 500
@@ -38,6 +39,15 @@ export async function runGh(host, target, args, { timeoutMs = TIMEOUT_MS, pollMs
       error: settled.error,
     }),
   }
+}
+
+// For writes: returns the output, or throws the coded gh failure.
+export async function runGhOrThrow(host, target, args, options) {
+  const result = await runGh(host, target, args, options)
+  if (!result.ok) {
+    throw commandError(result.error.code, result.error.message)
+  }
+  return result.output
 }
 
 // Recursive polling keeps each host call sequential without a loop; resolves to null on deadline.
