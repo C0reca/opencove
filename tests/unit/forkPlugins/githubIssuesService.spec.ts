@@ -1,25 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import { createIssueService } from '../../../plugins/github-issues/lib/service.mjs'
+import { remotes, unwrapLaunch } from './githubIssuesFakeHost'
 
 type FakeReply = { status: string; exitCode?: number; output?: string; error?: string }
 
 // Fake host: answers each gh call by its first argument pair, and counts the calls.
 function fakeHost(replies: Record<string, FakeReply>, projects: string[]) {
-  const starts: Array<{ target: { projectId: string }; args: string[] }> = []
+  const starts: Array<{ target: { projectId: string }; args: string[]; repo: string | null }> = []
+  let sequence = 0
   const host = {
     target: {
       list: async () => ({ projects: projects.map(id => ({ id, name: id, spaces: [] })) }),
     },
     operations: {
-      start: async (input: { target: { projectId: string }; args: string[] }) => {
-        starts.push(input)
-        const key = input.args.slice(0, 2).join(' ')
+      start: async (input: { target: { projectId: string }; command: string; args: string[] }) => {
+        const launch = unwrapLaunch(input.command, input.args)
+        const id = `op-${++sequence}`
+        if (launch.reply) {
+          // gh path lookup and probes: answered as installed, not counted as reads.
+          pending.set(id, { status: 'completed', ...launch.reply })
+          return { operationId: id, status: 'running' }
+        }
+        starts.push({ target: input.target, args: launch.args, repo: launch.repo })
+        const key = launch.args.slice(0, 2).join(' ')
         const reply = replies[`${input.target.projectId}|${key}`] ?? {
           status: 'failed',
           error: 'ENOENT',
         }
-        pending.set(`op-${starts.length}`, reply)
-        return { operationId: `op-${starts.length}`, status: 'running' }
+        pending.set(id, reply)
+        return { operationId: id, status: 'running' }
       },
       get: async ({ operationId }: { operationId: string }) => ({
         operationId,
@@ -35,10 +44,10 @@ function fakeHost(replies: Record<string, FakeReply>, projects: string[]) {
   return { host, starts }
 }
 
-const repoView = (name: string): FakeReply => ({
+const remote = (name: string): FakeReply => ({
   status: 'completed',
   exitCode: 0,
-  output: `{"nameWithOwner":"${name}"}`,
+  output: remotes(name),
 })
 const issues = (...numbers: number[]): FakeReply => ({
   status: 'completed',
@@ -50,9 +59,13 @@ describe('github-issues service', () => {
   it('reads each repository once for projects that share it and keeps other projects working', async () => {
     const { host, starts } = fakeHost(
       {
-        'p1|repo view': repoView('o/one'),
-        'p2|repo view': repoView('o/one'),
-        'p3|repo view': { status: 'completed', exitCode: 1, output: 'no git remotes found' },
+        'p1|remote -v': remote('o/one'),
+        'p2|remote -v': remote('o/one'),
+        'p3|remote -v': {
+          status: 'completed',
+          exitCode: 128,
+          output: 'fatal: not a git repository',
+        },
         'p1|issue list': issues(1, 2),
       },
       ['p1', 'p2', 'p3'],
@@ -93,11 +106,12 @@ describe('github-issues service', () => {
     const issueCalls = starts.filter(call => call.args[0] === 'issue')
     expect(issueCalls).toHaveLength(1)
     expect(issueCalls[0].target).toEqual({ projectId: 'p1' })
+    expect(issueCalls[0].repo).toBe('o/one')
   })
 
   it('serves repeated reads from the 60 s cache until refresh is requested', async () => {
     const { host, starts } = fakeHost(
-      { 'p1|repo view': repoView('o/one'), 'p1|issue list': issues(5) },
+      { 'p1|remote -v': remote('o/one'), 'p1|issue list': issues(5) },
       ['p1'],
     )
     let clock = 0

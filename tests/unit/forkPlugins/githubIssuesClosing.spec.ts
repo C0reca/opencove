@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { activate } from '../../../plugins/github-issues/main.mjs'
-import { createFakeHost, failed, ok, type GhReply } from './githubIssuesFakeHost'
+import { createFakeHost, failed, ok, remotes, type GhReply } from './githubIssuesFakeHost'
 
 const PR_URL = 'https://github.com/C0reca/opencove/pull/12'
 
@@ -8,8 +8,8 @@ const PR_URL = 'https://github.com/C0reca/opencove/pull/12'
 function ghFor(pull: Record<string, unknown> | 'missing') {
   return (args: string[]): GhReply => {
     const line = args.join(' ')
-    if (line === 'repo view --json nameWithOwner') {
-      return ok('{"nameWithOwner":"C0reca/opencove"}')
+    if (line === 'remote -v') {
+      return ok(remotes('C0reca/opencove'))
     }
     if (line.startsWith('pr view ')) {
       return pull === 'missing'

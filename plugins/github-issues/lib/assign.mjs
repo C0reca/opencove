@@ -63,8 +63,8 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
     return new Map(verdicts)
   }
 
-  async function viewIssue(projectId, number) {
-    const result = await runGh(host, { projectId }, issueViewArgs(number))
+  async function viewIssue(projectId, repo, number) {
+    const result = await runGh(host, { projectId }, issueViewArgs(number), { repo })
     if (!result.ok) {
       throw commandError(result.error.code, result.error.message, { number })
     }
@@ -109,7 +109,7 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
     const providerId = requireProvider(provider)
     const worktreeFlag = requireWorktreeFlag(worktree)
     const repo = await repoOf(project)
-    const issue = await viewIssue(project, issueNumber)
+    const issue = await viewIssue(project, repo, issueNumber)
 
     if (!skipTrustCheck) {
       const verdict = await trustOf({ projectId: project, repo, author: issue.author, policy })

@@ -2,7 +2,66 @@
 
 export const ISSUE_LIMIT = 50
 export const ISSUE_FIELDS = 'number,title,url,labels,assignees,author,updatedAt'
-export const REPO_VIEW_ARGS = Object.freeze(['repo', 'view', '--json', 'nameWithOwner'])
+export const GIT_REMOTE_ARGS = Object.freeze(['remote', '-v'])
+
+// gh runs inside a host PTY, so it sees a terminal: it colours JSON, queries the terminal
+// (OSC 11 / cursor position) and may page or prompt. These variables make it plain and
+// non-interactive; they are passed through /usr/bin/env because operations take no env.
+export const GH_ENV = Object.freeze([
+  'NO_COLOR=1',
+  'CLICOLOR=0',
+  'TERM=dumb',
+  'GH_PROMPT_DISABLED=1',
+  'GH_NO_UPDATE_NOTIFIER=1',
+  'GH_SPINNER_DISABLED=1',
+  'GH_PAGER=cat',
+  'PAGER=cat',
+  'GIT_TERMINAL_PROMPT=0',
+])
+
+// Subcommands that accept --repo; gh api addresses the repository in its path instead.
+const REPO_SCOPED = new Set(['issue', 'pr', 'label'])
+
+// Appends an explicit --repo so gh never infers (or asks for) the base repository.
+export function withRepo(args, repo) {
+  return repo && REPO_SCOPED.has(args[0]) ? [...args, '--repo', repo] : [...args]
+}
+
+// Terminal control sequences a PTY adds around a command's output (same String.raw convention as
+// ShellEnvironmentService's ANSI pattern): OSC queries, CSI colours/cursor, other ESC sequences,
+// and stray control characters.
+const OSC_PATTERN = new RegExp(String.raw`\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)`, 'g')
+const CSI_PATTERN = new RegExp(String.raw`\u001B\[[0-?]*[ -/]*[@-~]`, 'g')
+const ESC_PATTERN = new RegExp(String.raw`\u001B[@-_]`, 'g')
+const CONTROL_PATTERN = new RegExp(String.raw`[\u0000-\u0008\u000B-\u001F\u007F]`, 'g')
+
+// Strips those sequences and carriage returns so the remaining text can be parsed.
+export function cleanTerminalOutput(text) {
+  return String(text ?? '')
+    .replace(OSC_PATTERN, '')
+    .replace(CSI_PATTERN, '')
+    .replace(ESC_PATTERN, '')
+    .replace(/\r/g, '')
+    .replace(CONTROL_PATTERN, '')
+}
+
+// Removes anything that looks like a GitHub token before text reaches an error message.
+export function redactSecrets(text) {
+  return String(text ?? '')
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, '[redacted]')
+    .replace(/((?:token|authorization|password)\s*[:=]\s*)[^\n]*/gi, '$1[redacted]')
+}
+
+// The first few non-empty output lines, cleaned and redacted, for error messages.
+export function outputExcerpt(text, maxLines = 3) {
+  return redactSecrets(cleanTerminalOutput(text))
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .slice(0, maxLines)
+    .join(' | ')
+    .slice(0, 400)
+}
 
 export function issueListArgs() {
   return [
@@ -17,18 +76,23 @@ export function issueListArgs() {
   ]
 }
 
-// gh's stderr is merged into operation output, so skip any warning lines before the JSON.
+// gh's stderr is merged into the PTY output, so clean it and skip warning lines before the JSON.
 export function extractJson(text) {
-  const trimmed = String(text ?? '').trim()
+  const cleaned = cleanTerminalOutput(text).trim()
   try {
-    return JSON.parse(trimmed)
+    return JSON.parse(cleaned)
   } catch {
-    const lines = trimmed.split('\n')
+    const lines = cleaned.split('\n')
     const start = lines.findIndex(line => /^\s*[[{]/.test(line))
-    if (start < 0) {
-      throw new Error('gh did not return JSON')
+    try {
+      if (start >= 0) {
+        return JSON.parse(lines.slice(start).join('\n'))
+      }
+    } catch {
+      // Fall through to the descriptive error below.
     }
-    return JSON.parse(lines.slice(start).join('\n'))
+    const excerpt = outputExcerpt(text)
+    throw new Error(`gh did not return JSON${excerpt ? `: ${excerpt}` : ' (empty output)'}`)
   }
 }
 
@@ -59,12 +123,25 @@ export function parseIssueList(text) {
   return data.map(normalizeIssue).filter(issue => issue !== null)
 }
 
-export function parseRepoView(text) {
-  const name = extractJson(text)?.nameWithOwner
-  if (typeof name !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(name)) {
-    throw new Error('gh repo view did not return nameWithOwner')
-  }
-  return name
+// owner/repo of a github.com remote URL (ssh, scp-like or https), or null.
+export function githubRepoFromUrl(url) {
+  const match =
+    /^(?:[a-z+]+:\/\/)?(?:[^@/\s]+@)?github\.com[:/]([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/i.exec(
+      String(url ?? '').trim(),
+    )
+  return match ? `${match[1]}/${match[2]}` : null
+}
+
+// Picks the GitHub repository from `git remote -v`, preferring origin, then the first remote
+// that points at github.com. Returns null when no remote is a GitHub repository.
+export function parseGitRemotes(text) {
+  const remotes = cleanTerminalOutput(text)
+    .split('\n')
+    .map(line => /^(\S+)\s+(\S+)\s+\(fetch\)\s*$/.exec(line.trim()))
+    .filter(Boolean)
+    .map(([, name, url]) => ({ name, repo: githubRepoFromUrl(url) }))
+    .filter(remote => remote.repo)
+  return (remotes.find(remote => remote.name === 'origin') ?? remotes[0])?.repo ?? null
 }
 
 export function issueViewArgs(number) {
@@ -152,10 +229,11 @@ export function classifyGhFailure({
   error = '',
 } = {}) {
   const errorText = String(error ?? '')
-  const outputText = String(output ?? '')
+  const outputText = cleanTerminalOutput(output)
   const combined = `${outputText}\n${errorText}`
 
-  if (/ENOENT|executable|not found|no such file/i.test(errorText)) {
+  // 127 is env's "command not found" exit status.
+  if (exitCode === 127 || /ENOENT|executable|not found|no such file/i.test(errorText)) {
     return { code: 'gh-missing', message: MESSAGES['gh-missing'] }
   }
   if (/gh auth login|not logged in|authentication required|GH_TOKEN|HTTP 401/i.test(combined)) {
@@ -167,14 +245,11 @@ export function classifyGhFailure({
     return { code: 'not-github', message: MESSAGES['not-github'] }
   }
 
-  const detail = combined
-    .split('\n')
-    .map(line => line.trim())
-    .find(line => line.length > 0)
+  const detail = outputExcerpt(combined)
   const reason =
     status === 'cancelled' ? 'gh was cancelled' : `gh failed (exit ${exitCode ?? 'unknown'})`
   return {
     code: 'gh-failed',
-    message: (detail ? `${reason}: ${detail}` : reason).slice(0, 300),
+    message: (detail ? `${reason}: ${detail}` : reason).slice(0, 500),
   }
 }

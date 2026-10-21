@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { activate } from '../../../plugins/github-issues/main.mjs'
 import { sidebarItemsForProject } from '../../../plugins/github-issues/lib/report.mjs'
-import { createFakeHost, failed, ok, type GhReply } from './githubIssuesFakeHost'
+import { createFakeHost, failed, ok, remotes, type GhReply } from './githubIssuesFakeHost'
 
 const report = {
   repos: [
@@ -78,8 +78,8 @@ describe('github-issues sidebar through the backend', () => {
   it('reads author trust with gh and shapes the section', async () => {
     const gh = (args: string[]): GhReply => {
       const line = args.join(' ')
-      if (line === 'repo view --json nameWithOwner') {
-        return ok('{"nameWithOwner":"C0reca/opencove"}')
+      if (line === 'remote -v') {
+        return ok(remotes('C0reca/opencove'))
       }
       if (line.startsWith('issue list ')) {
         return ok(

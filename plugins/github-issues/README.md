@@ -18,8 +18,30 @@ After editing the source, run `pnpm opencove plugin reload github-issues`.
 - `gh` installed and logged in (`gh auth login`) on the project's machine.
 - The project's directory must have a GitHub remote.
 
+- A POSIX target (macOS or Linux): commands are launched through `/usr/bin/env`.
+
 When one of these is missing, the section shows a message instead of failing, and
 other projects still load.
+
+### How gh is run
+
+Host operations run inside a PTY, so a plain `gh` sees a terminal. It then colours JSON,
+queries the terminal and may page or prompt. That made `issues.list` fail with "gh did not
+return JSON" (#22). The plugin therefore:
+
+- **Resolves the repository** from `git remote -v`: `origin` first, otherwise the first
+  github.com remote. Every `issue`, `pr` and `label` call passes `--repo owner/repo`, so gh
+  never guesses the base repository.
+- **Finds gh** with the login shell's `command -v gh`, then `/opt/homebrew/bin/gh`,
+  `/usr/local/bin/gh`, then `gh` on the PTY's PATH. The first one that answers
+  `--version` is cached per project.
+- **Sets the environment** through `/usr/bin/env`: `NO_COLOR=1`, `CLICOLOR=0`, `TERM=dumb`,
+  `GH_PROMPT_DISABLED=1`, `GH_NO_UPDATE_NOTIFIER=1`, `GH_SPINNER_DISABLED=1`, `GH_PAGER=cat`,
+  `PAGER=cat` and `GIT_TERMINAL_PROMPT=0`.
+- **Cleans the output**, removing terminal escape sequences and carriage returns, before
+  parsing it.
+- **Reports failures with detail:** the exit code and the first output lines, with token-like
+  values redacted.
 
 ## Commands
 
@@ -227,7 +249,7 @@ The skill does not mention human-only actions, and its tests fail if it does.
 | `lib/gh.mjs` | gh argument lists, output parsing and failure classification (pure) |
 | `lib/report.mjs` | Grouping by repository and Sidebar item shaping (pure) |
 | `lib/cache.mjs` | TTL cache (pure) |
-| `lib/runGh.mjs` | Runs `gh` through `host.operations` and polls it to completion |
+| `lib/runGh.mjs` | Resolves gh, runs it through `/usr/bin/env` with `host.operations`, and polls it |
 | `lib/service.mjs` | Ties lookups, caches and grouping together |
 | `lib/trust.mjs` | Preference parsing and the author trust decision (pure) |
 | `lib/requirement.mjs` | Task tag, title and requirement text with the untrusted block (pure) |
