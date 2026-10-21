@@ -47,7 +47,13 @@ export function buildReport(groups, repoIssues) {
 }
 
 // Sidebar tree for one project, derived from a report that contains it.
-export function sidebarItemsForProject(report, projectId) {
+// isTrusted(author) decides whether an issue may be assigned by the plain command;
+// autoApprove puts a visible warning first, because the agents launched here skip prompts.
+export function sidebarItemsForProject(
+  report,
+  projectId,
+  { isTrusted = () => false, autoApprove = false } = {},
+) {
   const refresh = {
     id: 'refresh',
     label: 'Refresh issues',
@@ -56,16 +62,21 @@ export function sidebarItemsForProject(report, projectId) {
 
   const repo = report.repos.find(entry => entry.projectIds.includes(projectId))
   if (repo) {
+    const warning = autoApprove
+      ? [
+          {
+            id: 'auto-approve-warning',
+            label: '⚠ Auto-approve ON: agents run without permission prompts',
+          },
+        ]
+      : []
     if (repo.issues.length === 0) {
-      return { items: [{ id: 'empty', label: 'No open issues' }, refresh] }
+      return { items: [...warning, { id: 'empty', label: 'No open issues' }, refresh] }
     }
     return {
       items: [
-        ...repo.issues.map(issue => ({
-          id: `issue-${issue.number}`,
-          label: `#${issue.number} ${issue.title}`,
-          ...(issue.labels.length > 0 ? { description: issue.labels.join(', ') } : {}),
-        })),
+        ...warning,
+        ...repo.issues.map(issue => issueSidebarItem(issue, projectId, isTrusted(issue.author))),
         refresh,
       ],
     }
@@ -81,5 +92,20 @@ export function sidebarItemsForProject(report, projectId) {
       },
       refresh,
     ],
+  }
+}
+
+// Trusted issues assign with the plain command; others only with the human-only menu action.
+function issueSidebarItem(issue, projectId, trusted) {
+  const labels = issue.labels.join(', ')
+  const description = trusted
+    ? labels
+    : [`⚠ untrusted author: ${issue.author ?? 'unknown'}`, labels].filter(Boolean).join(' · ')
+  const command = trusted ? 'issue.assign' : 'issue.assign-untrusted'
+  return {
+    id: `issue-${issue.number}`,
+    label: `#${issue.number} ${issue.title}`,
+    ...(description ? { description } : {}),
+    command: { id: command, params: { projectId, number: issue.number } },
   }
 }

@@ -1,4 +1,5 @@
 import { createTtlCache } from './cache.mjs'
+import { commandError } from './errors.mjs'
 import { issueListArgs, parseIssueList, parseRepoView, REPO_VIEW_ARGS } from './gh.mjs'
 import { buildReport, groupLookupsByRepo } from './report.mjs'
 import { runGh } from './runGh.mjs'
@@ -67,7 +68,19 @@ export function createIssueService({ host, ttlMs, now }) {
     return list({ projectIds, refresh })
   }
 
-  return { list, listAllProjects }
+  // Resolves a project's owner/repo through the same cache; throws a coded error when unknown.
+  async function repoForProject(projectId) {
+    const lookup = await lookupProject(projectId, false)
+    if (lookup.repo) {
+      return lookup.repo
+    }
+    throw commandError(
+      lookup.error?.code ?? 'gh-failed',
+      lookup.error?.message ?? 'The project repository is unknown.',
+    )
+  }
+
+  return { list, listAllProjects, repoForProject }
 }
 
 function mapSeries(items, mapper) {

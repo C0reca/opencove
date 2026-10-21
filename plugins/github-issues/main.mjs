@@ -1,9 +1,14 @@
+import { createAssignService } from './lib/assign.mjs'
+import { commandError } from './lib/errors.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
+import { normalizeLogin, normalizeRepo, readTrustPolicy } from './lib/trust.mjs'
 
 // Thin wiring: parameter checks and command routing. Logic lives in lib/.
 export async function activate(context) {
-  const service = createIssueService({ host: context.host })
+  const host = context.host
+  const service = createIssueService({ host })
+  const assigner = createAssignService({ host, repoOf: service.repoForProject })
 
   return {
     async runCommand(commandId, rawParams, commandContext) {
@@ -19,10 +24,19 @@ export async function activate(context) {
           return service.listAllProjects({ refresh })
         case 'issues.refresh':
           return service.list({ projectIds: requireProject(projectId), refresh: true })
-        case 'issues.sidebar': {
-          const report = await service.list({ projectIds: requireProject(projectId), refresh })
-          return sidebarItemsForProject(report, projectId)
-        }
+        case 'issues.sidebar':
+          return sidebarFor({ projectId, refresh, commandContext })
+        case 'issue.assign':
+          return assignIssue({ params, projectId, commandContext, skipTrustCheck: false })
+        case 'issue.assign-untrusted':
+          // Human-only: a menu invocation carries host context; a CLI run never does.
+          if (!commandContext?.host) {
+            throw commandError(
+              'human-only',
+              'issue.assign-untrusted is a Sidebar menu action; it cannot run from the CLI.',
+            )
+          }
+          return assignIssue({ params, projectId, commandContext, skipTrustCheck: true })
         default:
           throw new Error(`Unknown command: ${commandId}`)
       }
@@ -30,6 +44,42 @@ export async function activate(context) {
     async dispose() {
       context.log('GitHub Issues stopped')
     },
+  }
+
+  async function preferencesOf(commandContext) {
+    return commandContext?.preferences ?? (await host.preferences.get()) ?? {}
+  }
+
+  async function sidebarFor({ projectId, refresh, commandContext }) {
+    const report = await service.list({ projectIds: requireProject(projectId), refresh })
+    const entry = report.repos.find(item => item.projectIds.includes(projectId))
+    if (!entry) {
+      return sidebarItemsForProject(report, projectId)
+    }
+    const policy = readTrustPolicy(await preferencesOf(commandContext))
+    const verdicts = await assigner.trustAuthors({
+      projectId,
+      repo: entry.repo,
+      authors: entry.issues.map(issue => issue.author),
+      policy,
+    })
+    return sidebarItemsForProject(report, projectId, {
+      isTrusted: author => verdicts.get(normalizeLogin(author)) === true,
+      autoApprove: policy.autoApproveRepos.has(normalizeRepo(entry.repo)) === true,
+    })
+  }
+
+  async function assignIssue({ params, projectId, commandContext, skipTrustCheck }) {
+    if (!projectId) {
+      throw commandError('invalid-params', 'projectId is required')
+    }
+    return assigner.assign({
+      projectId,
+      number: params.number,
+      provider: params.provider,
+      policy: readTrustPolicy(await preferencesOf(commandContext)),
+      skipTrustCheck,
+    })
   }
 }
 

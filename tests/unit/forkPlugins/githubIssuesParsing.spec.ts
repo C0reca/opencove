@@ -174,9 +174,14 @@ describe('github-issues grouping and sidebar items', () => {
       groupLookupsByRepo([{ projectId: 'p1', repo: 'o/one', error: null }]),
       new Map([['o/one', { ok: true, issues: [issue] }]]),
     )
-    expect(sidebarItemsForProject(report, 'p1')).toEqual({
+    expect(sidebarItemsForProject(report, 'p1', { isTrusted: () => true })).toEqual({
       items: [
-        { id: 'issue-1', label: '#1 First', description: 'bug, p1' },
+        {
+          id: 'issue-1',
+          label: '#1 First',
+          description: 'bug, p1',
+          command: { id: 'issue.assign', params: { projectId: 'p1', number: 1 } },
+        },
         {
           id: 'refresh',
           label: 'Refresh issues',
