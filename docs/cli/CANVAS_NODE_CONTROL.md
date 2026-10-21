@@ -43,6 +43,7 @@ opencove node update website --node <id> [--title <text>] [--url <url>] [--pinne
 opencove node delete --node <id> [--pretty]
 opencove canvas focus node --node <id> [--pretty]
 opencove canvas focus space [space locator] [--pretty]
+opencove space create --parent <spaceId> [--name <text>] [--project <id>] [--pretty]
 ```
 
 `--focus` 是 create 的 CLI 编排：
@@ -52,6 +53,15 @@ opencove canvas focus space [space locator] [--pretty]
 3. 返回 node result 和 focus delivery metadata。
 
 Focus 失败不会回滚已创建的 node。
+
+## Space Create
+
+`opencove space create` wraps the `space.createChild` control command. It creates a child Space under an existing Space (`--parent`), optionally named and scoped to a project (`--project`).
+
+- The parent must have a canvas position (`rect`). A parent that has none fails with `parent_missing_rect`. The CLI prints a message asking you to place the space on the canvas, then exits 1. The JSON result is still printed to stdout.
+- The child inherits the parent's `directoryPath`. It does not create a directory, and it does not move nodes.
+- A child Space does not get a worktree by itself. Bind one with `opencove worktree create --space <childSpaceId>` (this requires the child's parent to be a root-bound Space).
+- There is no CLI command yet to remove or archive a Space. `worktree archive` resets a Space's directory but keeps the Space.
 
 ## Space Locator
 

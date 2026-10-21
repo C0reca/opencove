@@ -10,6 +10,7 @@ import { printUsage } from './usage.mjs'
 import { CONTROL_SURFACE_PROTOCOL_VERSION } from './constants.mjs'
 import { tryHandleMultiEndpointCommands } from './commands/multiEndpoint.mjs'
 import { tryHandleNodeControlCommands } from './commands/nodeControl.mjs'
+import { tryHandleSpaceCommands } from './commands/space.mjs'
 import { createPluginGuideResult } from './pluginGuide.mjs'
 import { parsePluginCommand, resolvePluginCommandTimeout } from './commands/plugins.mjs'
 import {
@@ -203,6 +204,18 @@ async function main() {
 
   if (
     await tryHandleNodeControlCommands({
+      command,
+      args,
+      connection,
+      pretty,
+      timeoutMs,
+    })
+  ) {
+    return
+  }
+
+  if (
+    await tryHandleSpaceCommands({
       command,
       args,
       connection,

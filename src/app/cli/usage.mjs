@@ -39,7 +39,10 @@ export function printUsage() {
   process.stdout.write(`  opencove endpoint remove --endpoint-id <id> [--pretty]\n\n`)
   process.stdout.write(`  opencove project list [--pretty]\n`)
   process.stdout.write(`  opencove space list [--project <id>] [--pretty]\n\n`)
-  process.stdout.write(`  opencove space get --space <id> [--pretty]\n\n`)
+  process.stdout.write(`  opencove space get --space <id> [--pretty]\n`)
+  process.stdout.write(
+    `  opencove space create --parent <spaceId> [--name <text>] [--project <id>] [--pretty]\n\n`,
+  )
   process.stdout.write(`  opencove node list [space locator] [--kind <kind>] [--pretty]\n`)
   process.stdout.write(`  opencove node get --node <id> [--pretty]\n`)
   process.stdout.write(
