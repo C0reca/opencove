@@ -46,7 +46,7 @@ export function printUsage() {
     `  opencove node create <note|task|website|agent|terminal> [space locator] [--focus] [--pretty]\n`,
   )
   process.stdout.write(
-    `  opencove node create agent [space locator] [--prompt <text>] [--provider <id>] [--model <id>] [--full-access true|false] [--pretty]\n`,
+    `  opencove node create agent [space locator] [--prompt <text>] [--provider <id>] [--model <id>] [--full-access true|false] [--task <nodeId>] [--pretty]\n`,
   )
   process.stdout.write(
     `  opencove node update <note|task|website> --node <id> [--frame <json>] [--pretty]\n`,

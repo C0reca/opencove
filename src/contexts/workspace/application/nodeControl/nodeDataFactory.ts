@@ -40,6 +40,7 @@ export type NodeControlCreateData =
       provider: AgentProviderId | null
       model: string | null
       agentFullAccess?: boolean
+      taskNodeId?: string
     }
   | { kind: 'terminal'; shell: string | null; command: string | null; profileId: string | null }
 
@@ -152,6 +153,19 @@ function normalizeAgentFullAccess(value: unknown): { agentFullAccess?: boolean }
   })
 }
 
+function normalizeAgentTaskNodeId(value: unknown): { taskNodeId?: string } {
+  if (value === undefined) {
+    return {}
+  }
+  const taskNodeId = typeof value === 'string' ? value.trim() : ''
+  if (taskNodeId.length === 0) {
+    throw createAppError('common.invalid_input', {
+      debugMessage: 'node.create agent data.taskNodeId must be a non-empty string.',
+    })
+  }
+  return { taskNodeId }
+}
+
 export function normalizeCreateNodeData(
   kind: ManagedCanvasNodeKind,
   data: unknown,
@@ -213,6 +227,7 @@ export function normalizeCreateNodeData(
       provider: normalizeAgentProvider(record.provider),
       model: normalizeOptionalString(record.model),
       ...normalizeAgentFullAccess(record.agentFullAccess),
+      ...normalizeAgentTaskNodeId(record.taskNodeId),
     }
   }
 
@@ -360,7 +375,7 @@ export function makeNode(options: {
           directoryMode: 'workspace',
           customDirectory: null,
           shouldCreateDirectory: false,
-          taskId: null,
+          taskId: options.data.kind === 'agent' ? (options.data.taskNodeId ?? null) : null,
         }
       : null
 

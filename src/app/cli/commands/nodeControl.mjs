@@ -111,11 +111,13 @@ function buildCreateData(kind, args) {
   }
   if (kind === 'agent') {
     const agentFullAccess = readBooleanFlagValue(args, '--full-access')
+    const taskNodeId = args.includes('--task') ? requireFlagValue(args, '--task') : null
     return {
       prompt: readFlagValue(args, '--prompt') ?? '',
       provider: readFlagValue(args, '--provider'),
       model: readFlagValue(args, '--model'),
       ...(agentFullAccess === null ? {} : { agentFullAccess }),
+      ...(taskNodeId ? { taskNodeId } : {}),
     }
   }
   return {
