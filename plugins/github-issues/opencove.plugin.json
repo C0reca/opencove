@@ -35,7 +35,7 @@
       {
         "id": "issue.assign",
         "title": "Assign issue to agent",
-        "description": "Creates a task for a trusted issue (idempotent per issue) and launches a Claude Code agent on it. Refuses issues whose author is not trusted.",
+        "description": "Creates a task for a trusted issue (idempotent per issue) and launches a Claude Code agent on it. Refuses issues whose author is not trusted. worktree true (or worktree-repos) runs the agent in a child Space with its own git worktree under the project's root Space; parentSpaceId picks that root explicitly.",
         "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"provider\":\"claude-code\"}'",
         "target": "plugin",
         "menus": ["sidebar"]
@@ -103,6 +103,13 @@
       }
     ],
     "preferences": [
+      {
+        "id": "worktree-repos",
+        "title": "Worktree repositories",
+        "description": "Comma or newline separated owner/repo list. Assigning an issue of these repositories (from the Sidebar or the CLI) creates a child Space with its own git worktree, unless worktree is passed explicitly.",
+        "type": "string",
+        "default": ""
+      },
       {
         "id": "trusted-authors",
         "title": "Trusted issue authors",

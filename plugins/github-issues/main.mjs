@@ -133,6 +133,8 @@ export async function activate(context) {
       provider: params.provider,
       policy: readTrustPolicy(await preferencesOf(commandContext)),
       skipTrustCheck,
+      worktree: params.worktree,
+      parentSpaceId: params.parentSpaceId,
     })
   }
 }

@@ -21,7 +21,9 @@ export interface FakeNode {
 }
 
 export interface FakeHostOptions {
-  gh: (args: string[]) => GhReply
+  gh: (args: string[], command?: string) => GhReply
+  spaces?: Array<{ id: string; name: string }>
+  launchError?: string
   prefs?: Record<string, string>
   nodes?: FakeNode[]
   agentStates?: Record<string, string>
@@ -41,8 +43,11 @@ export function createFakeHost({
   sessions = {},
   outputs = {},
   projects = ['p1'],
+  spaces = [],
+  launchError,
 }: FakeHostOptions) {
   const reads: string[] = []
+  const processCalls: Array<{ command: string; args: string[] }> = []
   const ghCalls: string[][] = []
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
@@ -53,13 +58,19 @@ export function createFakeHost({
 
   const host = {
     target: {
-      list: async () => ({ projects: projects.map(id => ({ id, name: id, spaces: [] })) }),
+      list: async () => ({
+        projects: projects.map(id => ({ id, name: id, spaces: id === 'p1' ? spaces : [] })),
+      }),
     },
     operations: {
-      start: async ({ args }: { args: string[] }) => {
-        ghCalls.push(args)
+      start: async ({ command, args }: { command?: string; args: string[] }) => {
+        if (command === 'opencove') {
+          processCalls.push({ command, args })
+        } else {
+          ghCalls.push(args)
+        }
         const operationId = `op-${++sequence}`
-        operations.set(operationId, gh(args))
+        operations.set(operationId, gh(args, command ?? 'gh'))
         return { operationId, status: 'running' }
       },
       get: async ({ operationId }: { operationId: string }) => {
@@ -80,11 +91,22 @@ export function createFakeHost({
         truncated: false,
       }),
       get: async ({ nodeId }: { nodeId: string }) => ({ node: nodes.get(nodeId) }),
-      create: async ({ kind, title, data }: { kind: string; title: string; data: object }) => {
+      create: async ({
+        kind,
+        title,
+        data,
+        target,
+      }: {
+        kind: string
+        title: string
+        data: object
+        target?: { spaceId?: string }
+      }) => {
         const node: FakeNode = {
           id: `task-${++sequence}`,
           kind,
           title,
+          spaceId: target?.spaceId ?? null,
           data: { kind, ...data },
         }
         nodes.set(node.id, node)
@@ -106,6 +128,9 @@ export function createFakeHost({
       // exist, be a task, and be in the same Space as the launch target.
       launch: async (input: Record<string, unknown>) => {
         launches.push(input)
+        if (launchError) {
+          throw new Error(launchError)
+        }
         const agentId = `agent-${++sequence}`
         const taskNodeId = input.taskNodeId as string | undefined
         if (taskNodeId !== undefined) {
@@ -149,5 +174,5 @@ export function createFakeHost({
     },
   }
 
-  return { host, ghCalls, launches, created, updates, nodes, reads }
+  return { host, ghCalls, processCalls, launches, created, updates, nodes, reads }
 }

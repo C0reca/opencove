@@ -84,6 +84,8 @@ describe('github-issues issue.assign', () => {
       taskNodeId: fake.created[0].id,
       agentNodeId: expect.any(String),
       agentFullAccess: false,
+      spaceId: null,
+      branch: null,
       reused: false,
     })
   })

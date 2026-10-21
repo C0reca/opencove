@@ -93,6 +93,7 @@ Trusted issues show the assign action in the Sidebar. Untrusted issues are label
 | --- | --- | --- |
 | `trusted-authors` | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty |
 | `auto-approve-repos` | Comma or newline separated `owner/repo` list. Agents for these repositories run with full access and no permission prompts. | empty |
+| `worktree-repos` | Comma or newline separated `owner/repo` list. Assigning an issue of these repositories (Sidebar or CLI) gives it a child Space and worktree by default. An explicit `worktree` parameter wins. See [Worktree per issue](#worktree-per-issue). | empty |
 
 When the project's repository is in `auto-approve-repos`, the top of the Issues section shows
 `⚠ Auto-approve ON: agents run without permission prompts`.
@@ -149,6 +150,51 @@ invokes it yet. Use it only from a menu, after reading the issue yourself. It re
 
 Like `issue.assign-untrusted`, it is not in the CLI usage text.
 
+## Worktree per issue
+
+`issue.assign` with `"worktree": true` gives the issue its own place to work:
+
+1. Creates a child Space of the project's root Space, named `issue-<N>-<slug>`, with
+   `opencove space create --parent <root> --name <name> --project <id>`. The slug is the title reduced
+   to lowercase ASCII letters, digits and single hyphens, at most 40 characters. The title is untrusted,
+   so nothing else reaches the command. A title with no ASCII letters gives `issue-<N>`.
+2. Creates a worktree on the branch of the same name with `opencove worktree create --space <child> --name <name>`.
+3. Creates the task inside the child Space and launches the agent there, so its working directory is
+   the worktree. `agentFullAccess` and `taskNodeId` work as before.
+
+Defaults and rules:
+
+- Without `worktree`, the `worktree-repos` preference decides (`owner/repo` list, empty by default).
+  An explicit `worktree` value always wins.
+- An existing task is reused as before. The plugin creates no second Space or worktree, and a
+  relaunched todo task stays in the Space it already has.
+- **Root Space:** the plugin lists the project's Spaces with `opencove space list --project <id>`. The
+  root is the one Space with no parent whose directory is not a `.opencove/worktrees` directory. If
+  there is no such Space, or more than one, the call fails and nothing is created. Pass
+  `"parentSpaceId":"<id>"` to choose one explicitly. It must be a Space of this project.
+- Requires the `opencove` CLI on PATH on the project's machine.
+
+Failures are structured and nothing is deleted:
+
+| Code | Meaning |
+| --- | --- |
+| `cli-missing` | The `opencove` CLI is not on PATH on the project machine. |
+| `parent_missing_rect` | The root Space has no canvas position. Place it on the canvas, then retry. |
+| `branch-exists` | A branch or worktree with that name already exists. |
+| `no-root-space` | The project has no root Space to hold worktrees. |
+| `ambiguous-root-space` | More than one root Space. The error lists the candidates (id and name). Pass `parentSpaceId`. |
+| `parent-not-in-project` | The `parentSpaceId` given is not a Space of this project. |
+| `launch-failed` (with `spaceId`, `branch`) | The worktree was created but the agent launch failed. The error names the Space and branch so a person can clean up. |
+
+**Cleanup after close:** closing an issue does not remove its worktree or Space. To archive one
+manually:
+
+1. `opencove worktree archive --space <childSpaceId>`. It refuses a dirty worktree. Add
+   `--force --delete-branch` only after you have checked the work.
+2. Archive the empty Space in the OpenCove UI. The CLI has no command for that yet.
+
+Running agents are not stopped by `worktree archive`, so stop them in the UI first.
+
 ## Coordinator
 
 `coordinator.launch {projectId}` (Space menu, and the CLI) starts a Claude Code agent titled
@@ -193,6 +239,7 @@ The skill does not mention human-only actions, and its tests fail if it does.
 | `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
 | `lib/coordinator.mjs` | `coordinator.launch`: prompt and reuse rule |
 | `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
+| `lib/worktree.mjs` | Worktree per issue: name sanitising, CLI calls, error classes |
 | `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
 
 Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`.
