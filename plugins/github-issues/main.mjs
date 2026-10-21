@@ -1,6 +1,8 @@
 import { createAssignService } from './lib/assign.mjs'
 import { createClosingService } from './lib/closing.mjs'
+import { launchCoordinator } from './lib/coordinator.mjs'
 import { commandError } from './lib/errors.mjs'
+import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
@@ -40,6 +42,19 @@ export async function activate(context) {
             )
           }
           return assignIssue({ params, projectId, commandContext, skipTrustCheck: true })
+        case 'coordinator.launch': {
+          if (!projectId) {
+            throw commandError('invalid-params', 'projectId is required')
+          }
+          const spaceId = commandContext?.host?.spaceId
+          return launchCoordinator({
+            host,
+            projectId,
+            spaceId: typeof spaceId === 'string' && spaceId.length > 0 ? spaceId : undefined,
+          })
+        }
+        case 'agents.read':
+          return readLinkedAgent({ host, projectId, nodeId: params.nodeId })
         case 'agents.status': {
           const projectIds = projectId ? [projectId] : await allProjectIds()
           return { issues: await collectAgentStatus(host, projectIds) }

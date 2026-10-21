@@ -10,6 +10,16 @@ export function requireProjectId(value) {
   return value
 }
 
+export function requireNodeId(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 200) {
+    throw commandError(
+      'invalid-params',
+      'nodeId must be a non-empty string of at most 200 characters',
+    )
+  }
+  return value
+}
+
 export function requirePositiveInt(value, field) {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw commandError('invalid-params', `${field} must be a positive integer`)

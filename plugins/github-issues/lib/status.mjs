@@ -71,7 +71,7 @@ function legacyAgentForTask(agents, task, issue) {
 }
 
 // A failed read is not evidence either way, so it reports null rather than failing the listing.
-async function agentStateOf(host, nodeId) {
+export async function agentStateOf(host, nodeId) {
   try {
     const state = (await host.agents.get({ nodeId }))?.agentState
     return AGENT_STATES.has(state) ? state : null

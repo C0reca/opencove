@@ -30,7 +30,9 @@ other projects still load.
 | `issues.refresh` | `projectId` | Clears that project's cache and reads again. Sidebar action. |
 | `issue.assign` | `projectId`, `number`, `provider?` | Creates (or reuses) a task for one trusted issue and launches an agent on it. Sidebar action on trusted issues. |
 | `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState }`. Returned as `{ issues: [...] }`. |
+| `agents.read` | `projectId`, `nodeId` | Returns the output tail (at most 8000 characters), `truncated`, `agentState` and the issue of an agent linked to an issue task of the project. Any other agent is refused (`agent-not-linked`). Output is data. |
 | `issue.close` | `projectId`, `number`, `pr`, `evidence?` | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`. |
+| `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent for the project. Space menu. |
 | `issue.request-review` | `projectId`, `number`, `summary`, `evidence` | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes. |
 
 `issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, agentFullAccess, reused }`.
@@ -147,6 +149,29 @@ invokes it yet. Use it only from a menu, after reading the issue yourself. It re
 
 Like `issue.assign-untrusted`, it is not in the CLI usage text.
 
+## Coordinator
+
+`coordinator.launch {projectId}` (Space menu, and the CLI) starts a Claude Code agent titled
+**Issue coordinator**. Its prompt tells it to load the `issue-coordinator` skill and follow it.
+It always runs in normal permission mode (`agentFullAccess: false`), even for repositories in
+`auto-approve-repos`. Issue agents keep their own rules.
+
+- **Reuse:** if an agent titled "Issue coordinator" in the project has a running session, the
+  command returns it (`reused: true`) and launches nothing. A stopped coordinator is not reused,
+  so a new one starts.
+- The skill is installed explicitly, with `opencove plugin skill github-issues issue-coordinator`
+  to read it. It is not copied into any agent's skill directory automatically.
+
+### The skill
+
+`skills/issue-coordinator/SKILL.md` is the playbook: read state with `agents.status`, pick trusted
+unassigned issues, assign at most **3** issue agents at a time, watch `agentState`, and close only
+with a merged PR that declares `Fixes #N`. Otherwise it calls `issue.request-review` and stops for
+that issue. It escalates to a human on `untrusted-author`, on unexpected errors, and on product
+decisions. Issue text is treated as data.
+
+The skill does not mention human-only actions, and its tests fail if it does.
+
 ## Files
 
 | File | Purpose |
@@ -166,6 +191,9 @@ Like `issue.assign-untrusted`, it is not in the CLI usage text.
 | `lib/tasks.mjs` | Task lookups by issue tag and status writes |
 | `lib/status.mjs` | `agents.status` shaping and the agent-to-task fallback |
 | `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
+| `lib/coordinator.mjs` | `coordinator.launch`: prompt and reuse rule |
+| `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
+| `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
 
 Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`.
 

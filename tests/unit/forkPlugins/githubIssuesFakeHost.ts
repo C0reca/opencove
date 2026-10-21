@@ -25,6 +25,8 @@ export interface FakeHostOptions {
   prefs?: Record<string, string>
   nodes?: FakeNode[]
   agentStates?: Record<string, string>
+  sessions?: Record<string, string>
+  outputs?: Record<string, string>
   projects?: string[]
 }
 
@@ -36,8 +38,11 @@ export function createFakeHost({
   prefs = {},
   nodes: seeded = [],
   agentStates = {},
+  sessions = {},
+  outputs = {},
   projects = ['p1'],
 }: FakeHostOptions) {
+  const reads: string[] = []
   const ghCalls: string[][] = []
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
@@ -116,11 +121,27 @@ export function createFakeHost({
         }
         return { node: { id: agentId } }
       },
+      read: async ({ nodeId }: { nodeId: string }) => {
+        reads.push(nodeId)
+        return {
+          nodeId,
+          sessionId: `session-${nodeId}`,
+          output: outputs[nodeId] ?? '',
+          truncated: false,
+          fromSeq: 0,
+          toSeq: 0,
+        }
+      },
       get: async ({ nodeId }: { nodeId: string }) => {
         if (!nodes.has(nodeId)) {
           throw new Error(`no agent ${nodeId}`)
         }
-        return { node: nodes.get(nodeId), session: null, agentState: agentStates[nodeId] ?? null }
+        const status = sessions[nodeId]
+        return {
+          node: nodes.get(nodeId),
+          session: status ? { status } : null,
+          agentState: agentStates[nodeId] ?? null,
+        }
       },
     },
     preferences: {
@@ -128,5 +149,5 @@ export function createFakeHost({
     },
   }
 
-  return { host, ghCalls, launches, created, updates, nodes }
+  return { host, ghCalls, launches, created, updates, nodes, reads }
 }
