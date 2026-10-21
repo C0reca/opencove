@@ -85,12 +85,16 @@ const output = await host.terminals.read({ nodeId: terminal.node.id });
   selects its default shell/profile. `command` is shell command text, not an argv
   array; a remote command requires an explicit target `shell`. For an executable
   plus argv and temporary progress/result, use `host.operations` instead.
-- `agents.launch({ target, title?, frame?, prompt, provider?, model?, agentFullAccess? })`
+- `agents.launch({ target, title?, frame?, prompt, provider?, model?, agentFullAccess?, taskNodeId? })`
   launches a regular Agent window with the target Worker's supported provider/runtime
   rules. `agentFullAccess` is an optional boolean: `true` requests full access, `false`
   requests the normal (approval-gated) permission mode, and omitting it uses the global
   Agent setting. Any other value is rejected. The choice applies to this launch only and
   is not stored on the node, so a later relaunch uses the global setting.
+  `taskNodeId` optionally links the new agent to an existing task node in the same
+  Space: both sides are linked and the task moves to `doing`. The task must exist, be
+  a task, and have no live linked agent. Otherwise the launch is rejected before it
+  starts, and nothing is linked.
   Supported provider IDs are `claude-code`, `codex`, `opencode`, `gemini`, `pi`,
   and `kimi` (availability depends on the target Worker).
 - Both create methods return `{ revision, projectId, spaceId, node }`. Save

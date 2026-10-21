@@ -132,4 +132,14 @@ describe('CLI node control commands', () => {
     ).rejects.toThrow('exit 2')
     expect(requests).toHaveLength(0)
   })
+
+  it('forwards --task as data.taskNodeId on node create agent and omits it when absent', async () => {
+    const requests = stubInvokeRequests()
+
+    await invokeNodeArgs(['node', 'create', 'agent', '--space', 'space-1', '--task', 'task-1'])
+    await invokeNodeArgs(['node', 'create', 'agent', '--space', 'space-1'])
+
+    expect(requests[0].payload.data?.taskNodeId).toBe('task-1')
+    expect(requests[1].payload.data).not.toHaveProperty('taskNodeId')
+  })
 })

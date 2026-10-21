@@ -257,6 +257,14 @@ describe('plugin canvas routing over two authenticated Workers', () => {
       await expect(
         host('agents.launch', { target, prompt: 'x', provider: 'codex', agentFullAccess: 'no' }),
       ).rejects.toThrow('agentFullAccess must be a boolean')
+      await expect(
+        host('agents.launch', {
+          target,
+          prompt: 'x',
+          provider: 'codex',
+          taskNodeId: 'missing-task',
+        }),
+      ).rejects.toThrow('was not found in the target project')
       const normal = await host<CreateNodeResult>('agents.launch', {
         target,
         prompt: 'Inspect in normal mode',
