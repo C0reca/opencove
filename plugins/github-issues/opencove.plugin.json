@@ -31,6 +31,37 @@
         "description": "Clears the cache for a project's repository and reads its open issues again.",
         "target": "plugin",
         "menus": ["sidebar"]
+      },
+      {
+        "id": "issue.assign",
+        "title": "Assign issue to agent",
+        "description": "Creates a task for a trusted issue (idempotent per issue) and launches a Claude Code agent on it. Refuses issues whose author is not trusted.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"provider\":\"claude-code\"}'",
+        "target": "plugin",
+        "menus": ["sidebar"]
+      },
+      {
+        "id": "issue.assign-untrusted",
+        "title": "Assign issue (untrusted author)",
+        "description": "Human-only Sidebar action: assigns an issue whose author is not trusted. Needs host context, so it cannot run from the CLI.",
+        "target": "plugin",
+        "menus": ["sidebar"]
+      }
+    ],
+    "preferences": [
+      {
+        "id": "trusted-authors",
+        "title": "Trusted issue authors",
+        "description": "Extra authors whose issues may be assigned, one line per repository: owner/repo: alice, bob  or  *: alice. Adds to the defaults (repository owner, C0reca, collaborators with write access).",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "id": "auto-approve-repos",
+        "title": "Auto-approve repositories",
+        "description": "Comma or newline separated owner/repo list. Agents launched for these repositories run with full access and no permission prompts.",
+        "type": "string",
+        "default": ""
       }
     ]
   }

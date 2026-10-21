@@ -67,6 +67,38 @@ export function parseRepoView(text) {
   return name
 }
 
+export function issueViewArgs(number) {
+  return ['issue', 'view', String(number), '--json', 'number,title,body,url,author']
+}
+
+// The author is the trust subject; a missing author stays null and is treated as untrusted.
+export function parseIssueView(text) {
+  const raw = extractJson(text)
+  if (!raw || typeof raw !== 'object' || !Number.isInteger(raw.number)) {
+    throw new Error('gh issue view did not return an issue')
+  }
+  return {
+    number: raw.number,
+    title: typeof raw.title === 'string' ? raw.title : '',
+    body: typeof raw.body === 'string' ? raw.body : '',
+    url: typeof raw.url === 'string' ? raw.url : '',
+    author: typeof raw.author?.login === 'string' ? raw.author.login : null,
+  }
+}
+
+// The caller validates `repo` and `login` against GitHub's character sets before calling.
+export function collaboratorPermissionArgs(repo, login) {
+  return ['api', `repos/${repo}/collaborators/${login}/permission`]
+}
+
+export function parseCollaboratorPermission(text) {
+  const permission = extractJson(text)?.permission
+  if (typeof permission !== 'string') {
+    throw new Error('gh api did not return a permission')
+  }
+  return permission
+}
+
 const MESSAGES = {
   'gh-missing':
     'GitHub CLI (gh) is not installed on this machine. Install it from https://cli.github.com/.',
