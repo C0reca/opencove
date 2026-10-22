@@ -191,3 +191,5 @@ Scan the QR code below to join the OpenCove community group and chat with other 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 </div>
+
+Teste de permissões do fork
