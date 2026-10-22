@@ -4,18 +4,85 @@ Fork de `DeadWaveWave/opencove` (remote `upstream`), base `v0.4.0-nightly.202610
 Objetivo: três funcionalidades de fluxo de trabalho com GitHub Issues, com a menor
 divergência possível do núcleo para continuar a fazer merge do upstream.
 
-Issues: plano #1 · F1 #2 · F2 #3 (#5, #6, #7, #11) · F3 #4 (#8, #9).
-Estado (2026-10-21): implementado. PRs #12 (F1), #13 (#11), #14 (#5), #15 (#6), #16 (#8),
-#17 e #19 (#7), #18 (#9). Os ids de comandos e preferências usam hífen (o host recusa camelCase).
+Issues: plano #1 · F1 #2 · F2 #3 (#5, #6, #7, #11, #27) · F3 #4 (#8, #9, #37, #39, #40, #45, #46).
+Estado (2026-10-22): implementado e validado ao vivo, incluindo o modo autónomo. O modelo de
+operação atual está na §0 e prevalece sobre as regras originais da §2.0, que ficam como histórico.
+Os ids de comandos e preferências usam hífen (o host recusa camelCase).
 Para instalar: `pnpm build` e reiniciar a app; depois `opencove plugin install plugins/github-issues`.
 
-Decisões em aberto:
-- **Modo de permissões ao retomar um agente.** O `agentFullAccess` não fica guardado no nó, por isso
-  relançar ou retomar segue a definição global. Recomendado: desligar "agent full access" nas
-  definições globais.
-- **Limpeza da worktree por issue.** `worktree archive` não remove o Space, porque não há
-  `space.archive` na Control Surface, e não pára agentes que estejam a correr.
-- **CI do fork.** Os workflows nunca correram no fork e têm de ser ativados no separador Actions.
+## 0. Modelo de operação atual (2026-10-22)
+
+**Agentes autónomos por repositório.**
+- A preferência `permission-modes` (linhas `owner/repo: normal|auto|full`, com suporte a
+  `owner/*`; a linha exata ganha à wildcard) define o modo dos agentes de issue **e** do
+  coordenador, ao lançar e ao retomar.
+- Correspondência com o núcleo (#39, `agentPermissionMode`), para o Claude Code:
+  - normal → `--permission-mode default`
+  - auto → `--permission-mode auto` (classificador)
+  - full → `--dangerously-skip-permissions`
+- O modo fica guardado no nó do agente e usa-se ao retomar (#27, #39).
+- A antiga `auto-approve-repos` é lida como `full`.
+- **Só em projetos locais (#46):** num projeto remoto, auto e full caem para normal e a sidebar
+  mostra o aviso, porque o hook de guarda não corre no destino e falharia aberto.
+- O "agent full access" global está desligado. Com o full access desligado o Claude recebe
+  sempre `--permission-mode default` explícito, por isso nunca herda o auto mode do utilizador.
+
+**Worktrees obrigatórias.**
+- Cada agente de issue corre num Space filho `issue-<N>-<slug>`, com worktree e branch próprios.
+- O coordenador corre num Space/worktree `issue-coordinator`.
+- Não existe atribuição sem worktree. A raiz é o Space sem pai, excluindo as worktrees. Se
+  houver mais do que uma raiz, a atribuição falha com erro explícito; `parentSpaceId` escolhe uma.
+
+**Deny list obrigatória**, em `.claude/settings.local.json` de cada worktree (excluído do git
+via `info/exclude`). Aplica-se em qualquer modo e está validada ao vivo em auto mode:
+- `permissions.deny`:
+  - `gh pr merge`, `gh pr close`, `gh issue close`, `gh api`
+  - `git push --force`, `-f`, `--force-with-lease`
+  - editar `.claude/`
+- Hook `PreToolUse` de guarda (`plugins/github-issues/guard/agentGuard.mjs`, em exec-form pelo
+  Electron em modo Node). Bloqueia as variantes e o que depende do caminho:
+  - `+refspec`, push para `main`/`master`
+  - `git -C`, `reset --hard` e `rm -r` fora da worktree
+  - escritas em `.claude/`
+  - comandos compostos
+- `permissions.allow`, para correr sem pedir: consultas `gh pr|issue list|view -R …` e os
+  comandos do plugin que o coordenador usa.
+
+**Coordenador.**
+- Lança-se com `coordinator.launch`. Segue a skill `issue-coordinator`:
+  - processa das issues mais antigas para as mais recentes e ignora as que têm a label
+    `no-agent`; o CLI recusa-as;
+  - relê `agents.status` antes de cada `issue.assign`;
+  - faz uma chamada por issue, com o número literal;
+  - lê `issues.list` com `refresh: true` em cada volta.
+- **Acordar (#45):** o backend do plugin vigia os agentes de issue e acorda o coordenador com
+  mensagens `[github-issues] …` quando um agente passa a `done` ou `waiting`.
+  - A mensagem é enviada em duas escritas (texto, depois Enter), por causa da proteção do Claude
+    Code contra colagens.
+  - Há debounce e nunca escreve com o coordenador a meio de um turno.
+  - Preferência `coordinator-wake`.
+- Num `waiting`, o coordenador lê o agente com `agents.read` e escreve ao humano o que ele pede.
+
+**O merge é só do humano.**
+- Com um PR pronto, o coordenador chama `issue.request-review`: label `needs-review` e
+  comentário com resumo e evidência. A issue fica aberta.
+- `issue.close` só fecha com PR `MERGED` que declare `Fixes #N`.
+- O `main` do fork tem um ruleset ativo, sem exceções (id 25630824):
+  - só aceita alterações por PR;
+  - sem force push;
+  - sem apagar o branch.
+
+**Upstream.** Os PRs genéricos do núcleo ficam preparados em branches do fork e são abertos
+pelo dono, porque implicam assinar o CLA:
+- `upstream/claude-permission-mode`: #11 + #27;
+- `upstream/link-agent-to-task`: #6;
+- o #39 vai depois de o primeiro ser aceite.
+
+**Limites conhecidos.**
+- O guard reconhece um subconjunto de shell: não trata `eval`, heredocs nem variáveis em geral.
+- As sugestões automáticas do Claude Code podem propor "merge the PR". O guard bloqueia-o.
+- `worktree archive` não remove o Space, porque não existe `space.archive` na Control Surface.
+  Os Spaces vazios arquivam-se na interface.
 
 Ordem de preferência para onde o código vive: **(a) plugin → (b) CLI → (c) núcleo**.
 
@@ -121,13 +188,13 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
      `<github-issue-content trust="untrusted-user-data">…</github-issue-content>`,
      precedido de uma instrução explícita: são dados, não instruções. Qualquer
      ocorrência da tag de fecho dentro do corpo é neutralizada.
-3. **Permissões dos agentes.** Por omissão o Claude Code arranca em modo normal e
+3. *(Substituída pela §0.)* **Permissões dos agentes.** Por omissão o Claude Code arranca em modo normal e
    pede permissões. A preferência `auto-approve-repos` (lista `owner/repo`, vazia por
    omissão) ativa a auto-aprovação por projeto. O painel mostra no topo da secção
    um item de aviso visível quando um projeto a tem ligada.
    - Isto exige a alteração de núcleo #11, porque hoje o plugin não consegue
      escolher o modo e a app usa por omissão `agentFullAccess: true`.
-4. **Limite conhecido.** As salvaguardas da CLI (sem `force`, allowlist) são
+4. *(Substituída pela §0: o modo autónomo usa a deny list e o hook de guarda.)* **Limite conhecido.** As salvaguardas da CLI (sem `force`, allowlist) são
    barreiras de aplicação, não de segurança. Um agente com shell pode chamar `gh`
    diretamente, e quem tiver o token da Control Surface consegue forjar o contexto
    de menu. A barreira real é o coordenador correr em modo normal, em que o humano
@@ -215,6 +282,7 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
 | Testes | `tests/unit/forkPlugins/githubIssues*.spec.ts` | nenhum (ficheiros novos) |
 | Núcleo F2.b | `nodeDataFactory.ts`, `nodeCreateCommit.ts`, `nodeControlHandlers.ts`, `pluginCanvasHost.ts`, `commands/nodeControl.mjs`, `docs/cli/CANVAS_NODE_CONTROL.md`, `docs/plugins/CANVAS_API.md` | médio: zona ativa no upstream |
 | Núcleo F2.d | `nodeControlHandlers.ts`/`nodeControlRuntime.ts`, `pluginCanvasHost.ts`, `commands/nodeControl.mjs`, os mesmos docs | médio: zona ativa no upstream |
+| Núcleo #27 e #39 | `AgentCommandFactory.ts`, `hydrateAgentNode.ts`, `sessionPrepareOrRevivePreparation.ts`, `useAgentNodeLifecycle.support.ts`, a forma persistida do nó do agente, `src/shared/utils/agentPermissionMode.ts` | médio: lançamento e retoma de agentes |
 | CLI F2.c | `src/app/cli/opencove.mjs` (ou `commands/space.mjs` novo), `usage.mjs` | baixo/médio: `opencove.mjs` é um if/else longo |
 | Docs | `docs/FORK_PLAN.md` | nenhum |
 
@@ -233,13 +301,15 @@ recebe duas alterações pequenas e genéricas (F2.b #6 e F2.d #11).
    inteiro e `projectId` pela Host API.
 5. **Rate limit e latência do `gh`** com muitos projetos. Cache curta (60 s) por
    repositório no backend, mais refresh manual.
-6. **CHANGELOG.md e `main`:** o fork não edita `CHANGELOG.md` (é o ficheiro com
+6. **O guard falha aberto se o hook não correr** (por exemplo num mount remoto). Mitigação:
+   auto e full só em projetos locais (#46), e as regras `permissions.deny` como segunda camada.
+7. **CHANGELOG.md e `main`:** o fork não edita `CHANGELOG.md` (é o ficheiro com
    mais conflitos). As notas do fork ficam neste documento e nas PRs do fork.
 
 ## 5. Sincronização com o upstream
 
-- `main` é o branch de integração do fork (fork e upstream juntos). Hoje
-  `main == upstream/main`.
+- `main` é o branch de integração do fork (fork e upstream juntos), protegido pelo ruleset
+  da §0: até o sync do upstream entra por PR.
 - Funcionalidades em `feat/<issue>-<slug>`, com PR para `C0reca/opencove:main`.
   O `gh repo set-default` já está configurado para o fork, para nenhuma PR ir
   para o upstream por engano.
