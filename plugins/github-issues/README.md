@@ -2,7 +2,8 @@
 
 Shows each project's open GitHub issues in an **Issues** Sidebar section. It reads
 them with the `gh` CLI on the machine that owns the project, so remote mounts and
-your existing `gh` login are used.
+your existing `gh` login are used. It can also start Claude Code agents on issues and
+run a coordinator that follows them (see [Autonomous agents](#autonomous-agents)).
 
 ## Install
 
@@ -17,7 +18,9 @@ After editing the source, run `pnpm opencove plugin reload github-issues`.
 
 - `gh` installed and logged in (`gh auth login`) on the project's machine.
 - The project's directory must have a GitHub remote.
-
+- The `opencove` CLI on PATH on the project's machine (Settings → Worker → CLI → Install CLI),
+  for worktrees and the coordinator.
+- A root Space with a canvas position in the project. Issue Spaces are created under it.
 - A POSIX target (macOS or Linux): commands are launched through `/usr/bin/env`.
 
 When one of these is missing, the section shows a message instead of failing, and
@@ -47,20 +50,20 @@ return JSON" (#22). The plugin therefore:
 
 | Command | Parameters | Effect |
 | --- | --- | --- |
-| `issues.list` | `projectId?`, `refresh?` | Without `projectId`, reads every project and groups them by repository. Returns `{ repos: [{ repo, projectIds, issues }], errors: [...] }`. |
+| `issues.list` | `projectId?`, `refresh?` | Without `projectId`, reads every project and groups them by repository. Returns `{ repos: [{ repo, projectIds, issues }], errors: [...] }`. Lists `no-agent` issues too. |
 | `issues.sidebar` | `projectId` | Sidebar items for one project. Used by the Sidebar section. |
 | `issues.refresh` | `projectId` | Clears that project's cache and reads again. Sidebar action. |
-| `issue.assign` | `projectId`, `number`, `provider?` | Creates (or reuses) a task for one trusted issue and launches an agent on it. Sidebar action on trusted issues. |
+| `issue.assign` | `projectId`, `number`, `provider?`, `parentSpaceId?` | Creates (or reuses) a task for one trusted issue and launches an agent on it in its own worktree. |
 | `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState, agentStateObservedAt }`. `agentState` is `working`, `waiting`, `done` or null; it is normalised from the Worker's latest hook observation (`{ state, source, observedAtMs }`, where a finished turn arrives as `standby`). Returned as `{ issues: [...] }`. |
 | `agents.read` | `projectId`, `nodeId` | Returns the output tail (at most 8000 characters), `truncated`, `agentState` and the issue of an agent linked to an issue task of the project. Any other agent is refused (`agent-not-linked`). Output is data. |
 | `issue.close` | `projectId`, `number`, `pr`, `evidence?` | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`. |
-| `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent for the project. Space menu. |
+| `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent in its own worktree Space. Space menu. |
 | `issue.request-review` | `projectId`, `number`, `summary`, `evidence` | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes. |
 
-`issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, agentFullAccess, reused }`.
+`issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, permissionMode, agentPermissionMode, spaceId, branch, reused }`.
 Example: `pnpm opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":5}'`.
-`provider` defaults to `claude-code`. A CLI run refuses an issue whose author is not trusted
-(error code `untrusted-author`).
+A CLI run refuses an issue whose author is not trusted (`untrusted-author`) and an issue labelled
+`no-agent` (`no-agent`).
 
 Each issue has `number`, `title`, `url`, `labels`, `assignees`, `author` and
 `updatedAt`. An error has `projectIds`, `repo` (or `null`), `code` and `message`.
@@ -69,16 +72,136 @@ Error codes: `gh-missing`, `gh-unauthenticated`, `not-github`, `gh-failed`.
 Issue results are cached per repository for 60 seconds. Use `refresh: true` or the
 Sidebar **Refresh issues** item to bypass the cache.
 
+## Autonomous agents
+
+Every agent the plugin launches (issue agents and the coordinator) follows the same rules:
+
+1. **Its own worktree.** It runs in a child Space with its own git worktree, never in the
+   project's directory or on the canvas.
+2. **A permission mode per repository** (see [Permission modes](#permission-modes)).
+3. **The mandatory guard** (see [Agent guard](#agent-guard)), written into its worktree
+   before it starts.
+
+### Permission modes
+
+Preference `permission-modes`: one line per repository.
+
+```text
+C0Reca/opencove: auto
+other/repo: normal
+C0reca/*: full
+```
+
+- Modes are `normal`, `auto` or `full`. The default for every repository is `normal`.
+- `owner/*` covers every repository of an owner. The **exact line wins** over the wildcard, whatever
+  their order.
+- A line with an unknown mode is `normal` (fails closed). Malformed lines are ignored.
+- The mode is passed to the core as `agentPermissionMode` on every launch, issue agents and the
+  coordinator alike, and it is also used when an agent is resumed:
+
+| Plugin mode | Core `agentPermissionMode` | Meaning |
+| --- | --- | --- |
+| `normal` | `default` | Claude Code asks before each action it is not allowed to take. |
+| `auto` | `auto` | Claude Code's auto mode decides. |
+| `full` | `full` | No permission prompts. |
+
+The guard applies in every mode, including `full`.
+
+**Migration from `auto-approve-repos`.** That preference is replaced by `permission-modes`. Until you
+migrate, a repository listed in `auto-approve-repos` counts as `full`, unless `permission-modes` has
+a line for it (an exact line or an owner wildcard). That keeps the old behaviour and lets you move to
+`auto` or `normal` explicitly. The `worktree-repos` preference is gone because every issue agent now
+has a worktree.
+
+The Sidebar's top item shows the mode when it is not `normal`: `⚠ Agents run in auto mode` or
+`⚠ Agents run in full access`.
+
+### Agent guard
+
+Every plugin agent gets `.claude/settings.local.json` in its worktree. The file is written before
+the agent starts, and `.claude/settings.local.json` is added to the repository's common
+`info/exclude`, so it is never committed. It has three layers.
+
+**(a) `permissions.deny`** (plain prefixes, checked by Claude Code):
+
+- `Bash(gh pr merge:*)`, `Bash(gh pr close:*)`, `Bash(gh issue close:*)`, `Bash(gh api:*)`
+- `Bash(git push --force:*)`, `Bash(git push -f:*)`, `Bash(git push --force-with-lease:*)`
+- `Edit(/.claude/**)`. The leading slash anchors the rule to the worktree root. Claude Code never
+  consults `Write` path rules, so `Edit` covers every write.
+
+**(b) `permissions.allow`** (read-only and plugin commands, no prompt):
+
+- `gh pr list`, `gh pr view`, `gh issue list`, `gh issue view`, each with `-R` or `--repo`.
+- `opencove plugin run github-issues` with `agents.status`, `agents.read`, `issues.list`,
+  `issue.assign`, `issue.request-review` and `issue.close`.
+- `opencove plugin skill github-issues:*` and `opencove project list:*`.
+
+`issue.close` stays allowed because the plugin refuses it unless the PR is `MERGED` and declares
+`Fixes #N`. It is the only way for an agent to finish an issue. `issue.assign-untrusted` and
+`issue.close-manual` are human-only; the CLI refuses them, so the prefix rules cannot reach them.
+
+**(c) A `PreToolUse` hook for Bash**, which runs in exec form:
+
+```text
+command: /usr/bin/env
+args:    ELECTRON_RUN_AS_NODE=1, <the Worker's process.execPath>, <plugin>/guard/agentGuard.mjs, <worktree root>
+```
+
+`process.execPath` is OpenCove's own runtime (Electron, which needs `ELECTRON_RUN_AS_NODE=1` to run
+as Node), the same rule the OpenCove hook relay uses. The guard resolves its own path from
+`import.meta.url`. The worktree root is its one argument. It reads the hook's JSON from stdin and
+answers with `hookSpecificOutput.permissionDecision: "deny"` and a reason, or prints nothing and
+exits 0, which leaves the decision to the normal permission flow. It never approves a call.
+
+The guard denies:
+
+- `gh pr merge`, `gh pr close`, `gh issue close` and `gh api`, also after `-R`/`--repo`, after
+  `env VAR=…`, and inside `sh -c`, `$(…)` and backticks;
+- `git push` with `--force`, `-f` (also in a cluster such as `-fu`), `--force-with-lease`,
+  `--force-if-includes` or `--mirror`, and any `+refspec`;
+- `git push` whose destination is `main` or `master` (`origin main`, `HEAD:main`,
+  `HEAD:refs/heads/main`, `:main`, `:refs/heads/main`), and any wildcard destination;
+- `git reset --hard` run in, or aimed with `-C` at, a directory outside the worktree root, and
+  `GIT_DIR` or `GIT_WORK_TREE` set on a git command;
+- `rm` with `-r`, `-R`, `-rf`, `-fr` or `--recursive` whose target resolves outside the worktree
+  root, or is the root itself;
+- any write to `.claude/`: redirections (`>`, `>>`, `>|`, `&>`), `tee`, `cp`, `mv`, `rm`, `touch`,
+  `ln`, `install`, `truncate`, `chmod` and `sed -i`. `dd of=` is not covered (a listed limit).
+
+`cd` inside a command moves the directory the rules are checked against. `rm -r` and writes to
+`.claude/` with a target the guard cannot resolve (`~`, `$VAR`, a backtick) are denied, because
+they cannot be verified.
+
+**Limits of the guard.** It parses a shell subset, not a shell. It splits on `&&`, `||`, `;`, `|`,
+`&` and newlines, and handles quotes, `\x`, `env`, `command`, `exec`, `nohup`, `time`, `cd`,
+`git -C` and nested `sh -c`. It does not handle `eval`, heredocs, brace or glob expansion, or
+arbitrary variables. It does not inspect programs outside its list. Prefix rules match the text as
+written, so the `permissions.deny` layer misses forms such as `git push origin -f`; the hook covers
+them. The guard runs on the Worker's machine with the Worker's runtime, so it fits local worktrees,
+the same as OpenCove's own hook relay. If the guard cannot run, Claude Code treats a non-blocking
+hook error as allow, so the protection depends on the guard being installed where the agent runs.
+Malformed hook input is allowed with a note on stderr.
+
+### Why the merge is human-only
+
+A merge is the one step that changes the main branch for good. The coordinator never performs it.
+`gh pr merge` is denied for every plugin agent in every mode, and the coordinator's playbook never
+asks for it. When a pull request is ready, the coordinator calls `issue.request-review` and tells
+you. You merge it; then `issue.close` closes the issue, but only with a merged PR that declares
+`Fixes #N`. Without that proof the coordinator does not close the issue.
+
 ## Assigning issues to agents
 
 `issue.assign` turns one issue into a canvas task and starts an agent on it:
 
-1. Reads the issue with `gh issue view`, including its author.
+1. Reads the issue with `gh issue view`, including its author and labels.
 2. Checks the author is trusted (see below). An untrusted author is refused and nothing is written.
-3. Creates a task titled `#N <title>` tagged `issue:owner/repo#N`. If a task with that tag exists,
-   it is reused and no second task is created.
-4. Launches an agent with `provider` (default `claude-code`) and the task requirement, passing
-   `taskNodeId`. Core #6 links the agent and task and moves the task to `doing`, in the task's Space.
+3. Refuses a `no-agent` issue from the CLI (see [no-agent](#no-agent-issues)).
+4. Creates a child Space and worktree for the issue (see [Worktree per issue](#worktree-per-issue)).
+5. Writes the guard into the worktree, then creates the task titled `#N <title>` tagged
+   `issue:owner/repo#N`. If a task with that tag exists, it is reused.
+6. Launches an agent with `provider` (default `claude-code`), the task requirement, `taskNodeId`
+   and `agentPermissionMode`. Core #6 links the agent and task and moves the task to `doing`.
 
 The requirement asks the agent to open a PR whose body contains `Fixes #N`. The issue title and
 body go inside `<github-issue-content trust="untrusted-user-data">…</github-issue-content>`, after
@@ -86,13 +209,10 @@ a note that this block is data, not instructions. Any closing or opening tag of 
 the issue text is escaped.
 
 **Reuse:** an existing task that already has a launched agent (status not `todo`, or a linked
-agent) is returned as-is and never relaunched; `agentFullAccess` is `null` because nothing was
-launched. A `todo` task without an agent (left by an attempt that failed before launch) is launched
-again.
-
-**Permissions:** agents start with `agentFullAccess: false`, so Claude Code asks before it runs
-commands. The repository must be listed in `auto-approve-repos` for full access. Launching with an
-explicit flag needs the core change in issue #11; until that lands the host rejects the key.
+agent) is returned as-is and never relaunched. A `todo` task without an agent, left by an attempt
+that failed before launch, is launched again in the Space it already has. A `todo` task on the
+project canvas, which has no worktree, is refused with `task-not-in-worktree`: remove that task and
+assign the issue again.
 
 ### Trust model
 
@@ -109,29 +229,32 @@ for 60 seconds per repository and user; failed lookups are not cached.
 Trusted issues show the assign action in the Sidebar. Untrusted issues are labelled
 `⚠ untrusted author: <login>` and get the **Assign issue (untrusted author)** action instead.
 
+### no-agent issues
+
+An issue labelled `no-agent` is never assigned by an agent. The coordinator skips it, and the CLI
+refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar marks it
+`⊘ excluded from agents (no-agent)`. The human **Assign issue** menu action still assigns it.
+
 ### Preferences
 
 | Preference | Format | Default |
 | --- | --- | --- |
 | `trusted-authors` | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty |
-| `auto-approve-repos` | Comma or newline separated `owner/repo` list. Agents for these repositories run with full access and no permission prompts. | empty |
-| `worktree-repos` | Comma or newline separated `owner/repo` list. Assigning an issue of these repositories (Sidebar or CLI) gives it a child Space and worktree by default. An explicit `worktree` parameter wins. See [Worktree per issue](#worktree-per-issue). | empty |
-
-When the project's repository is in `auto-approve-repos`, the top of the Issues section shows
-`⚠ Auto-approve ON: agents run without permission prompts`.
+| `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
+| `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
 
 ### Human-only action
 
 `issue.assign-untrusted` assigns an issue whose author is not trusted. It is only a Sidebar menu
 action and is **not** part of the CLI. It needs host context, so `opencove plugin run` rejects it
-with `human-only`. Use it only after you have read the issue yourself.
+with `human-only`. Use it only after you have read the issue yourself. The same menu action assigns
+`no-agent` issues.
 
 ### Security limit
 
 These checks are application guards, not a security boundary. An agent with shell access can call
-`gh` directly, and whoever holds the Control Surface token can forge a menu context. The real
-safeguard is running agents in normal mode, where you approve each shell command. Do not enable
-`auto-approve-repos` for a repository you would not let an agent change without review.
+`gh` directly, and whoever holds the Control Surface token can forge a menu context. The guard in
+[Agent guard](#agent-guard) narrows what an agent can do, and it has the limits listed there.
 
 ## Coordinator commands
 
@@ -174,27 +297,21 @@ Like `issue.assign-untrusted`, it is not in the CLI usage text.
 
 ## Worktree per issue
 
-`issue.assign` with `"worktree": true` gives the issue its own place to work:
+Every issue agent gets its own worktree. `issue.assign` does this:
 
 1. Creates a child Space of the project's root Space, named `issue-<N>-<slug>`, with
    `opencove space create --parent <root> --name <name> --project <id>`. The slug is the title reduced
    to lowercase ASCII letters, digits and single hyphens, at most 40 characters. The title is untrusted,
    so nothing else reaches the command. A title with no ASCII letters gives `issue-<N>`.
 2. Creates a worktree on the branch of the same name with `opencove worktree create --space <child> --name <name>`.
-3. Creates the task inside the child Space and launches the agent there, so its working directory is
-   the worktree. `agentFullAccess` and `taskNodeId` work as before.
+3. Writes the guard into that worktree, creates the task inside the child Space, and launches the
+   agent there, so its working directory is the worktree.
 
-Defaults and rules:
-
-- Without `worktree`, the `worktree-repos` preference decides (`owner/repo` list, empty by default).
-  An explicit `worktree` value always wins.
-- An existing task is reused as before. The plugin creates no second Space or worktree, and a
-  relaunched todo task stays in the Space it already has.
 - **Root Space:** the plugin lists the project's Spaces with `opencove space list --project <id>`. The
   root is the one Space with no parent whose directory is not a `.opencove/worktrees` directory. If
   there is no such Space, or more than one, the call fails and nothing is created. Pass
   `"parentSpaceId":"<id>"` to choose one explicitly. It must be a Space of this project.
-- Requires the `opencove` CLI on PATH on the project's machine.
+- `worktree` is no longer a choice. Omit it or pass `true`; `false` is refused (`invalid-params`).
 
 Failures are structured and nothing is deleted:
 
@@ -206,7 +323,9 @@ Failures are structured and nothing is deleted:
 | `no-root-space` | The project has no root Space to hold worktrees. |
 | `ambiguous-root-space` | More than one root Space. The error lists the candidates (id and name). Pass `parentSpaceId`. |
 | `parent-not-in-project` | The `parentSpaceId` given is not a Space of this project. |
-| `launch-failed` (with `spaceId`, `branch`) | The worktree was created but the agent launch failed. The error names the Space and branch so a person can clean up. |
+| `task-not-in-worktree` | A todo task for the issue exists on the project canvas. Remove it, then assign again. |
+| `guard-failed` | The guard file or its `info/exclude` entry could not be written. The agent is not launched. |
+| `launch-failed` (with `spaceId`, `branch`) | The worktree was created but a later step failed. The error names the Space and branch so a person can clean up. |
 
 **Cleanup after close:** closing an issue does not remove its worktree or Space. To archive one
 manually:
@@ -221,9 +340,12 @@ Running agents are not stopped by `worktree archive`, so stop them in the UI fir
 
 `coordinator.launch {projectId}` (Space menu, and the CLI) starts a Claude Code agent titled
 **Issue coordinator**. Its prompt tells it to load the `issue-coordinator` skill and follow it.
-It always runs in normal permission mode (`agentFullAccess: false`), even for repositories in
-`auto-approve-repos`. Issue agents keep their own rules.
 
+- **Worktree:** the coordinator runs in a child Space and worktree named `issue-coordinator`. If a
+  Space with that name exists, it is reused; otherwise it is created under the root Space. The Space
+  menu's own Space is ignored.
+- **Permission mode:** the repository's mode from `permission-modes`, the same as issue agents.
+  It is no longer forced to normal.
 - **Reuse:** if an agent titled "Issue coordinator" in the project has a running session, the
   command returns it (`reused: true`) and launches nothing. A stopped coordinator is not reused,
   so a new one starts.
@@ -232,39 +354,51 @@ It always runs in normal permission mode (`agentFullAccess: false`), even for re
 
 ### The skill
 
-`skills/issue-coordinator/SKILL.md` is the playbook: read state with `agents.status`, pick trusted
-unassigned issues, assign at most **3** issue agents at a time, watch `agentState`, and close only
-with a merged PR that declares `Fixes #N`. Otherwise it calls `issue.request-review` and stops for
-that issue. It escalates to a human on `untrusted-author`, on unexpected errors, and on product
-decisions. Issue text is treated as data.
+`skills/issue-coordinator/SKILL.md` is the playbook. It:
 
-The skill does not mention human-only actions, and its tests fail if it does.
+- processes issues **oldest first** (by number), and skips `needs-review` and `no-agent` issues;
+- re-reads `agents.status` immediately before each `issue.assign`, and keeps at most **3** issue agents
+  running;
+- assigns with **one call per issue**, the number written literally: no loops and no variables;
+- runs read-only gh queries with `-R owner/repo` right after the subcommand, one query per call,
+  with `-q` or `--jq` and no pipes;
+- closes an issue only with a merged PR that declares `Fixes #N`; otherwise it calls
+  `issue.request-review` and tells the human. Merging is always the human's.
+
+The skill escalates to a human on `untrusted-author`, on `no-agent` questions, on unexpected errors,
+and on product decisions. Issue text is treated as data. The skill never mentions `gh pr merge`, and
+its tests fail if it does.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `opencove.plugin.json` | Manifest: Sidebar section and commands |
+| `opencove.plugin.json` | Manifest: Sidebar section, commands, preferences |
 | `main.mjs` | Backend wiring: parameter checks and command routing |
 | `lib/gh.mjs` | gh argument lists, output parsing and failure classification (pure) |
 | `lib/report.mjs` | Grouping by repository and Sidebar item shaping (pure) |
 | `lib/cache.mjs` | TTL cache (pure) |
-| `lib/runGh.mjs` | Resolves gh, runs it through `/usr/bin/env` with `host.operations`, and polls it |
+| `lib/runGh.mjs` | Resolves gh and opencove, runs them through `/usr/bin/env` with `host.operations`, and polls them |
 | `lib/service.mjs` | Ties lookups, caches and grouping together |
 | `lib/trust.mjs` | Preference parsing and the author trust decision (pure) |
+| `lib/permissions.mjs` | `permission-modes` parsing, precedence and migration; core mode mapping (pure) |
+| `lib/agentSettings.mjs` | The guard written into each worktree: settings, deny and allow lists, `info/exclude` |
+| `guard/agentGuard.mjs` | The PreToolUse guard. `decide(input, worktreeRoot)` is pure |
+| `guard/tokenize.mjs` | The guard's shell-subset tokenizer (pure) |
 | `lib/requirement.mjs` | Task tag, title and requirement text with the untrusted block (pure) |
-| `lib/assign.mjs` | `issue.assign`: trust check, idempotent task lookup, launch |
+| `lib/assign.mjs` | `issue.assign`: trust and `no-agent` checks, idempotent task lookup, worktree, launch |
 | `lib/errors.mjs` | Coded command errors |
 | `lib/params.mjs` | Shared parameter validation (pure) |
 | `lib/tasks.mjs` | Task lookups by issue tag and status writes |
 | `lib/status.mjs` | `agents.status` shaping and the agent-to-task fallback |
 | `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
-| `lib/coordinator.mjs` | `coordinator.launch`: prompt and reuse rule |
+| `lib/coordinator.mjs` | `coordinator.launch`: prompt, the coordinator Space, reuse rule |
 | `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
-| `lib/worktree.mjs` | Worktree per issue: name sanitising, CLI calls, error classes |
+| `lib/worktree.mjs` | Worktree per issue: name sanitising, Space listing, CLI calls, error classes |
 | `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
 
-Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`.
+Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`. The guard's decision table is in
+`githubIssuesGuard.spec.ts`.
 
 Not yet: opening an issue from the Sidebar (the Sidebar API has no way to open a
 URL), linking the task to its agent node (#6), and a Sidebar item for `issue.close-manual`.

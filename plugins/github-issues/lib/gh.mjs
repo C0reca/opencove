@@ -145,7 +145,7 @@ export function parseGitRemotes(text) {
 }
 
 export function issueViewArgs(number) {
-  return ['issue', 'view', String(number), '--json', 'number,title,body,url,author']
+  return ['issue', 'view', String(number), '--json', 'number,title,body,url,author,labels']
 }
 
 // The author is the trust subject; a missing author stays null and is treated as untrusted.
@@ -160,6 +160,9 @@ export function parseIssueView(text) {
     body: typeof raw.body === 'string' ? raw.body : '',
     url: typeof raw.url === 'string' ? raw.url : '',
     author: typeof raw.author?.login === 'string' ? raw.author.login : null,
+    labels: (Array.isArray(raw.labels) ? raw.labels : [])
+      .map(label => label?.name)
+      .filter(name => typeof name === 'string'),
   }
 }
 
@@ -177,6 +180,8 @@ export function parseCollaboratorPermission(text) {
 }
 
 export const NEEDS_REVIEW_LABEL = 'needs-review'
+// Issues with this label stay visible but the coordinator never assigns them (#37).
+export const NO_AGENT_LABEL = 'no-agent'
 
 export function prViewArgs(pr) {
   return ['pr', 'view', String(pr), '--json', 'state,closingIssuesReferences,url']

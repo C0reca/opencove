@@ -1,21 +1,30 @@
 import { createTtlCache } from './cache.mjs'
+import { writeAgentGuard } from './agentSettings.mjs'
 import { commandError } from './errors.mjs'
 import {
   collaboratorPermissionArgs,
   issueViewArgs,
+  NO_AGENT_LABEL,
   parseCollaboratorPermission,
   parseIssueView,
 } from './gh.mjs'
 import { mapSeries, findSeries } from './sequence.mjs'
 import { runGh } from './runGh.mjs'
 import { composeRequirement, taskTag, taskTitle } from './requirement.mjs'
-import { createIssueWorktree, issueSpaceName, resolveRootSpace } from './worktree.mjs'
+import { permissionModeFor, corePermissionMode } from './permissions.mjs'
+import {
+  createIssueWorktree,
+  issueSpaceName,
+  resolveRootSpace,
+  targetWorkingDirectory,
+} from './worktree.mjs'
 import { normalizeLogin, normalizeRepo, permissionDecision, staticTrustReason } from './trust.mjs'
 
 export const DEFAULT_PROVIDER = 'claude-code'
 
-// Turns one GitHub issue into a canvas task and launches an agent on it. Host calls run one at a
-// time (the host admits few concurrent operations per owner). Trust is checked before any write.
+// Turns one GitHub issue into a canvas task in its own worktree and launches an agent on it.
+// Host calls run one at a time (the host admits few concurrent operations per owner).
+// Trust is checked before any write; the guard file is written before the agent launches.
 export function createAssignService({ host, repoOf, ttlMs, now }) {
   // Caches only real permission answers; a failed lookup is retried, which keeps trust fail-closed.
   const permissionCache = createTtlCache({ ttlMs, now })
@@ -94,20 +103,21 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
     })
   }
 
-  // skipTrustCheck is only ever true for the human menu action issue.assign-untrusted.
+  // skipTrustCheck and humanMenu are only ever true for the human menu actions. The CLI never sets them.
   async function assign({
     projectId,
     number,
     provider,
     policy,
     skipTrustCheck = false,
+    humanMenu = false,
     worktree,
     parentSpaceId,
   }) {
     const project = requireProjectId(projectId)
     const issueNumber = requireIssueNumber(number)
     const providerId = requireProvider(provider)
-    const worktreeFlag = requireWorktreeFlag(worktree)
+    requireWorktreeFlag(worktree)
     const repo = await repoOf(project)
     const issue = await viewIssue(project, repo, issueNumber)
 
@@ -121,6 +131,14 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         )
       }
     }
+    // Decision: the coordinator skips no-agent issues. Only a person's menu action assigns them.
+    if (issue.labels.includes(NO_AGENT_LABEL) && !humanMenu) {
+      throw commandError(
+        'no-agent',
+        `Issue ${repo}#${issueNumber} is labelled ${NO_AGENT_LABEL}, so agents are not assigned to it. A person can assign it from the sidebar.`,
+        { repo, number: issueNumber },
+      )
+    }
 
     const tag = taskTag(repo, issueNumber)
     const requirement = composeRequirement({
@@ -131,30 +149,37 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       body: issue.body,
     })
     const title = taskTitle(issueNumber, issue.title)
-    // Full access only when the repository is listed in autoApproveRepos; otherwise an explicit false.
-    const agentFullAccess = policy.autoApproveRepos.has(normalizeRepo(repo)) === true
+    const permissionMode = permissionModeFor(policy.permissionModes, repo)
+    const agentPermissionMode = corePermissionMode(permissionMode)
 
     const existing = await findTaskByTag(project, tag)
     // Decision: a task that already has a launched agent (status not todo, or a linked agent) is
     // returned as-is and never relaunched. A todo task without a linked agent is a previous attempt
-    // that failed before launch, so it is launched again.
+    // that failed before launch, so it is launched again in the Space it already has.
     if (existing && (existing.data.status !== 'todo' || existing.data.linkedAgentNodeId)) {
       return {
         repo,
         number: issueNumber,
         taskNodeId: existing.id,
         agentNodeId: existing.data.linkedAgentNodeId ?? null,
-        agentFullAccess: null,
+        agentPermissionMode: null,
         reused: true,
       }
     }
+    // Decision: a todo task on the project canvas has no worktree, and every issue agent needs one.
+    // It is refused rather than moved, so nothing runs outside a worktree.
+    if (existing && !existing.spaceId) {
+      throw commandError(
+        'task-not-in-worktree',
+        `The task for ${repo}#${issueNumber} is on the project canvas, not in a worktree. Remove that task, then assign the issue again.`,
+        { repo, number: issueNumber, taskNodeId: existing.id },
+      )
+    }
 
-    // Decision: an explicit `worktree` parameter wins; otherwise worktree-repos decides. A reused
-    // task keeps its own Space and never gets a second Space or worktree.
-    const useWorktree = worktreeFlag ?? policy.worktreeRepos.has(normalizeRepo(repo)) === true
+    // Every issue agent runs in its own worktree Space. A relaunched task keeps its Space.
     let spaceId = existing ? existing.spaceId : null
     let branch = null
-    if (!existing && useWorktree) {
+    if (!spaceId) {
       const rootSpaceId = await resolveRootSpace(host, project, {
         explicitParentSpaceId: requireParentSpaceId(parentSpaceId),
       })
@@ -168,10 +193,15 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       branch = made.branch
     }
 
-    // The task and the agent share a Space: a new worktree task lives in the child Space, a reused
-    // task keeps its Space, and any other new task lives on the project canvas.
-    const target = { projectId: project, ...(spaceId ? { spaceId } : {}) }
     try {
+      const target = { projectId: project, spaceId }
+      // The guard is written before the task and the agent exist, so the agent never starts without it.
+      await writeAgentGuard({
+        host,
+        projectId: project,
+        spaceId,
+        root: await targetWorkingDirectory(host, target),
+      })
       const taskNodeId = existing
         ? existing.id
         : (
@@ -189,7 +219,7 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         title,
         prompt: requirement,
         provider: providerId,
-        agentFullAccess,
+        agentPermissionMode,
         taskNodeId,
       })
       return {
@@ -197,7 +227,8 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         number: issueNumber,
         taskNodeId,
         agentNodeId: launched?.node?.id ?? null,
-        agentFullAccess,
+        permissionMode,
+        agentPermissionMode,
         spaceId,
         branch,
         reused: Boolean(existing),
@@ -232,7 +263,7 @@ function requireIssueNumber(value) {
   return value
 }
 
-// Optional explicit root Space for worktrees; only used when a worktree is created.
+// Optional explicit root Space for worktrees.
 function requireParentSpaceId(value) {
   if (value === undefined || value === null) {
     return null
@@ -246,15 +277,16 @@ function requireParentSpaceId(value) {
   return value
 }
 
-// undefined means "use the worktree-repos preference"; any present value must be a boolean.
+// Decision: every issue agent runs in a worktree. The old `worktree` choice is gone, so only
+// omitting it or passing true is accepted; false is refused rather than silently ignored.
 function requireWorktreeFlag(value) {
-  if (value === undefined || value === null) {
-    return undefined
+  if (value === undefined || value === null || value === true) {
+    return
   }
-  if (typeof value !== 'boolean') {
-    throw commandError('invalid-params', 'worktree must be true or false')
-  }
-  return value
+  throw commandError(
+    'invalid-params',
+    'every issue agent runs in its own worktree; worktree can only be omitted or true',
+  )
 }
 
 function requireProvider(value) {

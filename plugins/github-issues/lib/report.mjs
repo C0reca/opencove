@@ -1,3 +1,4 @@
+import { NO_AGENT_LABEL } from './gh.mjs'
 // Pure report shaping: group project lookups by repository and build Sidebar items.
 // Every error keeps the projectIds it affects, so one failing project never hides the others.
 
@@ -47,12 +48,12 @@ export function buildReport(groups, repoIssues) {
 }
 
 // Sidebar tree for one project, derived from a report that contains it.
-// isTrusted(author) decides whether an issue may be assigned by the plain command;
-// autoApprove puts a visible warning first, because the agents launched here skip prompts.
+// isTrusted(author) decides whether an issue may be assigned by the plain command.
+// permissionMode (normal | auto | full) puts a visible warning first when it is not normal.
 export function sidebarItemsForProject(
   report,
   projectId,
-  { isTrusted = () => false, autoApprove = false } = {},
+  { isTrusted = () => false, permissionMode = 'normal' } = {},
 ) {
   const refresh = {
     id: 'refresh',
@@ -62,13 +63,8 @@ export function sidebarItemsForProject(
 
   const repo = report.repos.find(entry => entry.projectIds.includes(projectId))
   if (repo) {
-    const warning = autoApprove
-      ? [
-          {
-            id: 'auto-approve-warning',
-            label: '⚠ Auto-approve ON: agents run without permission prompts',
-          },
-        ]
+    const warning = MODE_WARNINGS[permissionMode]
+      ? [{ id: 'permission-mode-warning', label: MODE_WARNINGS[permissionMode] }]
       : []
     if (repo.issues.length === 0) {
       return { items: [...warning, { id: 'empty', label: 'No open issues' }, refresh] }
@@ -95,12 +91,26 @@ export function sidebarItemsForProject(
   }
 }
 
+// Only non-normal modes are shown; normal is the default and needs no warning.
+const MODE_WARNINGS = Object.freeze({
+  auto: '⚠ Agents run in auto mode',
+  full: '⚠ Agents run in full access',
+})
+
 // Trusted issues assign with the plain command; others only with the human-only menu action.
+// no-agent issues stay listed, marked as excluded: the coordinator skips them, a person can assign.
 function issueSidebarItem(issue, projectId, trusted) {
   const labels = issue.labels.join(', ')
-  const description = trusted
-    ? labels
-    : [`⚠ untrusted author: ${issue.author ?? 'unknown'}`, labels].filter(Boolean).join(' · ')
+  const excluded = issue.labels.includes(NO_AGENT_LABEL)
+    ? `⊘ excluded from agents (${NO_AGENT_LABEL})`
+    : null
+  const description = [
+    trusted ? null : `⚠ untrusted author: ${issue.author ?? 'unknown'}`,
+    excluded,
+    labels,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const command = trusted ? 'issue.assign' : 'issue.assign-untrusted'
   return {
     id: `issue-${issue.number}`,

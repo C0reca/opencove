@@ -149,8 +149,8 @@ export function selectRootSpace(spaces, { explicitParentSpaceId = null } = {}) {
   return candidates[0].id
 }
 
-// Lists the project's Spaces through the CLI, then applies the root rule.
-export async function resolveRootSpace(host, projectId, { explicitParentSpaceId = null } = {}) {
+// Lists the project's Spaces through the CLI (normalised).
+export async function listProjectSpaces(host, projectId) {
   const listed = await runOpencove(host, projectId, ['space', 'list', '--project', projectId])
   if (!listed.ok) {
     throw commandError(listed.error.code, listed.error.message)
@@ -167,7 +167,29 @@ export async function resolveRootSpace(host, projectId, { explicitParentSpaceId 
       `opencove space list did not report the project Spaces: ${outputExcerpt(listed.output) || '(no output)'}`,
     )
   }
-  return selectRootSpace(normalizeSpaces(list), { explicitParentSpaceId })
+  return normalizeSpaces(list)
+}
+
+// Lists the project's Spaces, then applies the root rule.
+export async function resolveRootSpace(host, projectId, { explicitParentSpaceId = null } = {}) {
+  return selectRootSpace(await listProjectSpaces(host, projectId), { explicitParentSpaceId })
+}
+
+// The dedicated coordinator Space is found by its name, so a restarted plugin reuses it.
+export function findSpaceByName(spaces, name) {
+  return spaces.find(space => space.name === name) ?? null
+}
+
+// Absolute working directory of a target (a worktree Space), as the host resolves it.
+export async function targetWorkingDirectory(host, target) {
+  const resolved = await host.target.resolve(target)
+  if (
+    typeof resolved?.workingDirectory !== 'string' ||
+    !resolved.workingDirectory.startsWith('/')
+  ) {
+    throw commandError('target-unresolved', 'The agent Space has no absolute working directory.')
+  }
+  return resolved.workingDirectory
 }
 
 async function runOpencove(host, projectId, args) {

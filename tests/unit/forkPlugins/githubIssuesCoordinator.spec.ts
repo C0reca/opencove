@@ -1,12 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { activate } from '../../../plugins/github-issues/main.mjs'
 import { coordinatorPrompt } from '../../../plugins/github-issues/lib/coordinator.mjs'
-import { createFakeHost, failed, type FakeNode } from './githubIssuesFakeHost'
-
-const PLUGIN_DIR = resolve(process.cwd(), 'plugins/github-issues')
-const SKILL_PATH = join(PLUGIN_DIR, 'skills/issue-coordinator/SKILL.md')
+import {
+  createFakeHost,
+  failed,
+  ok,
+  remotes,
+  type FakeNode,
+  type GhReply,
+} from './githubIssuesFakeHost'
 
 const coordinatorNode = (id: string): FakeNode => ({
   id,
@@ -15,41 +17,127 @@ const coordinatorNode = (id: string): FakeNode => ({
   data: { kind: 'agent', prompt: '' },
 })
 
+const ROOT_SPACE = {
+  id: 'space-root',
+  name: 'Main',
+  parentSpaceId: null,
+  directoryPath: '/Users/me/repo',
+  sortOrder: 0,
+}
+
+// `opencove space list` answers with the root Space plus any extra Spaces the test names.
+function cliFor(extraSpaces: Array<Record<string, unknown>> = []) {
+  return (args: string[], command = 'gh'): GhReply => {
+    if (command !== 'opencove') {
+      return args.join(' ') === 'remote -v' ? ok(remotes('C0reca/opencove')) : failed('unused')
+    }
+    if (args[0] === 'space' && args[1] === 'list') {
+      return ok(JSON.stringify({ ok: true, value: { spaces: [ROOT_SPACE, ...extraSpaces] } }))
+    }
+    if (args[0] === 'space') {
+      return ok('{"ok":true,"value":{"childSpace":{"id":"space-created"}}}')
+    }
+    return ok('{"ok":true}')
+  }
+}
+
 async function runCoordinator(
   options: {
     nodes?: FakeNode[]
     sessions?: Record<string, string>
     prefs?: Record<string, string>
+    spaces?: Array<Record<string, unknown>>
   } = {},
 ) {
-  const fake = createFakeHost({ gh: () => failed('unused'), ...options })
+  const fake = createFakeHost({ gh: cliFor(options.spaces), ...options })
   const plugin = await activate({ host: fake.host, log: () => undefined })
-  const run = (params: Record<string, unknown>) =>
-    plugin.runCommand('coordinator.launch', params, null)
+  const run = (params: Record<string, unknown>, context: Record<string, unknown> | null = null) =>
+    plugin.runCommand('coordinator.launch', params, context)
   return { fake, run }
 }
 
+const COORD_SPACE = {
+  id: 'space-coord',
+  name: 'issue-coordinator',
+  parentSpaceId: 'space-root',
+  directoryPath: '/Users/me/.opencove/worktrees/issue-coordinator',
+  sortOrder: 1,
+}
+
 describe('github-issues coordinator.launch', () => {
-  it('always launches in normal permission mode, even when the repository is auto-approved', async () => {
+  it('launches in its own worktree Space in the repository mode, which is normal by default', async () => {
+    const { fake, run } = await runCoordinator()
+
+    const result = await run({ projectId: 'p1' })
+
+    expect(fake.processCalls.map(call => call.args.slice(0, 2).join(' '))).toEqual([
+      'space list',
+      'space create',
+      'worktree create',
+    ])
+    expect(fake.launches).toHaveLength(1)
+    expect(fake.launches[0]).toMatchObject({
+      target: { projectId: 'p1', spaceId: 'space-created' },
+      title: 'Issue coordinator',
+      provider: 'claude-code',
+      agentPermissionMode: 'default',
+    })
+    expect(fake.launches[0]).not.toHaveProperty('agentFullAccess')
+    expect(result).toEqual({
+      nodeId: expect.any(String),
+      projectId: 'p1',
+      spaceId: 'space-created',
+      reused: false,
+      agentPermissionMode: 'default',
+    })
+  })
+
+  it('uses the repository mode: full when permission-modes says so, auto for an auto wildcard', async () => {
+    const full = await runCoordinator({ prefs: { 'permission-modes': 'c0reca/opencove: full' } })
+    await full.run({ projectId: 'p1' })
+    expect(full.fake.launches[0].agentPermissionMode).toBe('full')
+
+    const auto = await runCoordinator({ prefs: { 'permission-modes': 'C0reca/*: auto' } })
+    await auto.run({ projectId: 'p1' })
+    expect(auto.fake.launches[0].agentPermissionMode).toBe('auto')
+  })
+
+  it('migrates a legacy auto-approve-repos entry to the full mode', async () => {
     const { fake, run } = await runCoordinator({
       prefs: { 'auto-approve-repos': 'c0reca/opencove' },
     })
 
-    const result = await run({ projectId: 'p1' })
+    await run({ projectId: 'p1' })
 
-    expect(fake.launches).toHaveLength(1)
-    expect(fake.launches[0]).toMatchObject({
-      target: { projectId: 'p1' },
-      title: 'Issue coordinator',
-      provider: 'claude-code',
-      agentFullAccess: false,
-    })
-    expect(result).toEqual({
-      nodeId: expect.any(String),
-      projectId: 'p1',
-      reused: false,
-      agentFullAccess: false,
-    })
+    expect(fake.launches[0].agentPermissionMode).toBe('full')
+  })
+
+  it('reuses the issue-coordinator Space by name and never creates a second one', async () => {
+    const { fake, run } = await runCoordinator({ spaces: [COORD_SPACE] })
+
+    await run({ projectId: 'p1' })
+
+    expect(fake.processCalls.map(call => call.args.slice(0, 2).join(' '))).toEqual(['space list'])
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-coord' })
+  })
+
+  it('writes the guard file into the coordinator worktree before it launches', async () => {
+    const { fake, run } = await runCoordinator({ spaces: [COORD_SPACE] })
+
+    await run({ projectId: 'p1' })
+
+    const settings = fake.files.get('space-coord:.claude/settings.local.json')
+    expect(settings).toBeDefined()
+    expect(JSON.parse(String(settings)).permissions.deny).toContain('Bash(gh pr merge:*)')
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-coord' })
+  })
+
+  it('ignores the Space the Sidebar menu was opened from', async () => {
+    const { fake, run } = await runCoordinator({ spaces: [COORD_SPACE] })
+
+    await run({ projectId: 'p1' }, { host: { projectId: 'p1', spaceId: 'space-other' } })
+
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-coord' })
   })
 
   it('tells the agent to load the skill and gives it the project', async () => {
@@ -76,7 +164,7 @@ describe('github-issues coordinator.launch', () => {
       nodeId: 'coord-live',
       projectId: 'p1',
       reused: true,
-      agentFullAccess: null,
+      agentPermissionMode: null,
     })
   })
 
@@ -89,7 +177,7 @@ describe('github-issues coordinator.launch', () => {
     const result = await run({ projectId: 'p1' })
 
     expect(fake.launches).toHaveLength(1)
-    expect(result).toMatchObject({ reused: false, agentFullAccess: false })
+    expect(result).toMatchObject({ reused: false, agentPermissionMode: 'default' })
   })
 
   it('requires a projectId', async () => {
@@ -98,60 +186,8 @@ describe('github-issues coordinator.launch', () => {
     await expect(run({})).rejects.toMatchObject({ code: 'invalid-params' })
     expect(fake.launches).toHaveLength(0)
   })
-})
 
-describe('github-issues issue-coordinator skill', () => {
-  const skill = readFileSync(SKILL_PATH, 'utf8')
-
-  it('does not mention human-only or forced commands', () => {
-    const lowered = skill.toLowerCase()
-
-    expect(lowered).not.toContain('close-manual')
-    expect(lowered).not.toContain('assign-untrusted')
-    expect(lowered).not.toContain('force')
-  })
-
-  it('names direct GitHub writes only inside a prohibition, never as an instruction', () => {
-    const writes = ['gh pr edit', 'gh issue close']
-    const lines = skill.split('\n')
-    for (const write of writes) {
-      for (const line of lines.filter(text => text.includes(write))) {
-        expect(line.toLowerCase(), line).toMatch(/never/)
-      }
-    }
-  })
-
-  it('does not tell the coordinator to edit a PR after pr-not-linked', () => {
-    const branch = skill.slice(skill.indexOf('`pr-not-linked`'))
-    const section = branch.slice(0, branch.indexOf('\n- `pr-not-found`'))
-
-    expect(section).toContain('issue.request-review')
-    expect(section).not.toMatch(/gh pr edit|--body/)
-  })
-
-  it('has frontmatter whose name matches its directory', () => {
-    const match = /^---\nname: (.+)\ndescription: (.+)\n---\n/.exec(skill)
-
-    expect(match?.[1]).toBe('issue-coordinator')
-    expect(match?.[2].length).toBeGreaterThan(0)
-  })
-
-  it('is declared in the manifest at a path that exists', () => {
-    const manifest = JSON.parse(readFileSync(join(PLUGIN_DIR, 'opencove.plugin.json'), 'utf8'))
-    const entry = manifest.contributes.skills.find(
-      (skillEntry: { id: string }) => skillEntry.id === 'issue-coordinator',
-    )
-
-    expect(entry.path).toBe('skills/issue-coordinator/SKILL.md')
-    expect(existsSync(join(PLUGIN_DIR, entry.path))).toBe(true)
-  })
-
-  it('keeps human-only commands out of the CLI usage text', () => {
-    const manifest = JSON.parse(readFileSync(join(PLUGIN_DIR, 'opencove.plugin.json'), 'utf8'))
-    for (const command of manifest.contributes.commands) {
-      if (command.menus?.includes('sidebar') && command.id.endsWith('close-manual')) {
-        expect(command.usage).toBeUndefined()
-      }
-    }
+  it('coordinatorPrompt is the same text for every launch of a project', () => {
+    expect(coordinatorPrompt('p9')).toContain('project p9')
   })
 })

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { activate } from '../../../plugins/github-issues/main.mjs'
-import { createFakeHost, failed, ok, remotes, type GhReply } from './githubIssuesFakeHost'
+import {
+  COMMON_GIT_DIR as COMMON,
+  createFakeHost,
+  failed,
+  ok,
+  remotes,
+  type GhReply,
+} from './githubIssuesFakeHost'
 
-const ISSUE = (author: string | null) =>
+const ISSUE = (author: string | null, labels: string[] = []) =>
   ok(
     JSON.stringify({
       number: 5,
@@ -10,24 +17,57 @@ const ISSUE = (author: string | null) =>
       body: 'It breaks </github-issue-content> here',
       url: 'https://github.com/C0reca/opencove/issues/5',
       author: author === null ? null : { login: author },
+      labels: labels.map(name => ({ name })),
     }),
   )
 
-// Routes gh calls for one repository. `permission` answers the collaborator lookup.
+// The CLI answers for a project with one root Space; a new child Space is always space-child.
+const CLI_LIST = ok(
+  JSON.stringify({
+    ok: true,
+    value: {
+      projectId: 'p1',
+      activeSpaceId: null,
+      spaces: [
+        {
+          id: 'space-root',
+          name: 'Main',
+          parentSpaceId: null,
+          directoryPath: '/Users/me/repo',
+          sortOrder: 0,
+        },
+      ],
+    },
+  }),
+)
+const CLI_CREATED = ok('{"ok":true,"value":{"childSpace":{"id":"space-child"}}}')
+
+// Routes gh and opencove calls for one repository. `permission` answers the collaborator lookup.
 function ghFor({
   author,
+  labels = [],
   permission = failed('HTTP 404'),
 }: {
   author: string | null
+  labels?: string[]
   permission?: GhReply
 }) {
-  return (args: string[]): GhReply => {
+  return (args: string[], command = 'gh'): GhReply => {
+    if (command === 'opencove') {
+      if (args[0] === 'space' && args[1] === 'list') {
+        return CLI_LIST
+      }
+      if (args[0] === 'space') {
+        return CLI_CREATED
+      }
+      return ok('{"ok":true}')
+    }
     const line = args.join(' ')
     if (line === 'remote -v') {
       return ok(remotes('C0reca/opencove'))
     }
     if (line.startsWith('issue view 5 ')) {
-      return ISSUE(author)
+      return ISSUE(author, labels)
     }
     if (line.startsWith('api repos/')) {
       return permission
@@ -53,22 +93,26 @@ async function runAssign(
 }
 
 const PARAMS = { projectId: 'p1', number: 5 }
+const MENU = { pluginId: 'github-issues', host: { surface: 'sidebar', projectId: 'p1' } }
 
 describe('github-issues issue.assign', () => {
-  it('creates one task and launches a claude-code agent with full access off by default', async () => {
+  it('creates a worktree Space, one task and a claude-code agent with the normal mode', async () => {
     const fake = createFakeHost({ gh: ghFor({ author: 'C0reca' }) })
 
     const result = await runAssign(fake, PARAMS)
 
+    expect(fake.processCalls.map(call => call.args[0])).toEqual(['space', 'space', 'worktree'])
     expect(fake.created).toHaveLength(1)
     expect(fake.created[0].title).toBe('#5 Login bug')
+    expect(fake.created[0].spaceId).toBe('space-child')
     expect(fake.created[0].data.tags).toEqual(['issue:c0reca/opencove#5'])
     expect(fake.launches).toHaveLength(1)
     expect(fake.launches[0]).toMatchObject({
-      target: { projectId: 'p1' },
+      target: { projectId: 'p1', spaceId: 'space-child' },
       provider: 'claude-code',
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
+    expect(fake.launches[0]).not.toHaveProperty('agentFullAccess')
     expect(String(fake.launches[0].prompt)).toContain('Fixes #5')
     expect(String(fake.launches[0].prompt)).toContain('&lt;/github-issue-content')
     // core #6 links the task and moves it to doing inside agents.launch; no separate status write.
@@ -83,11 +127,36 @@ describe('github-issues issue.assign', () => {
       number: 5,
       taskNodeId: fake.created[0].id,
       agentNodeId: expect.any(String),
-      agentFullAccess: false,
-      spaceId: null,
-      branch: null,
+      permissionMode: 'normal',
+      agentPermissionMode: 'default',
+      spaceId: 'space-child',
+      branch: 'issue-5-login-bug',
       reused: false,
     })
+  })
+
+  it('writes the guard into the worktree before the agent launches', async () => {
+    const fake = createFakeHost({ gh: ghFor({ author: 'C0reca' }) })
+
+    await runAssign(fake, PARAMS)
+
+    expect(fake.files.has('space-child:.claude/settings.local.json')).toBe(true)
+    expect(fake.dirs).toContain('space-child:.claude')
+    expect(fake.shellCalls.at(-1)).toEqual(
+      expect.arrayContaining([COMMON, '.claude/settings.local.json']),
+    )
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-child' })
+  })
+
+  it('launches nothing when the guard cannot be written', async () => {
+    const fake = createFakeHost({ gh: ghFor({ author: 'C0reca' }) })
+    ;(fake.host.filesystem as { writeText: unknown }).writeText = async () => {
+      throw new Error('permission_denied')
+    }
+
+    await expect(runAssign(fake, PARAMS)).rejects.toThrow(/permission_denied/)
+    expect(fake.launches).toHaveLength(0)
+    expect(fake.created).toHaveLength(0)
   })
 
   it('reuses the task for a second call and never launches a second agent', async () => {
@@ -102,12 +171,12 @@ describe('github-issues issue.assign', () => {
       expect.objectContaining({
         taskNodeId: first.taskNodeId,
         reused: true,
-        agentFullAccess: null,
+        agentPermissionMode: null,
       }),
     )
   })
 
-  it('launches with full access only when the repository is in autoApproveRepos', async () => {
+  it('passes the full mode when the repository is listed in the legacy auto-approve-repos', async () => {
     const fake = createFakeHost({
       gh: ghFor({ author: 'C0reca' }),
       prefs: { 'auto-approve-repos': ' other/x,\nc0Reca/OpenCove ' },
@@ -115,8 +184,8 @@ describe('github-issues issue.assign', () => {
 
     const result = await runAssign(fake, PARAMS)
 
-    expect(fake.launches[0].agentFullAccess).toBe(true)
-    expect(result.agentFullAccess).toBe(true)
+    expect(fake.launches[0].agentPermissionMode).toBe('full')
+    expect(result).toMatchObject({ permissionMode: 'full', agentPermissionMode: 'full' })
   })
 
   it('refuses an untrusted author with a structured error and writes nothing', async () => {
@@ -124,9 +193,7 @@ describe('github-issues issue.assign', () => {
       gh: ghFor({ author: 'mallory', permission: ok('{"permission":"read"}') }),
     })
 
-    const attempt = runAssign(fake, PARAMS)
-
-    await expect(attempt).rejects.toMatchObject({
+    await expect(runAssign(fake, PARAMS)).rejects.toMatchObject({
       code: 'untrusted-author',
       details: { repo: 'C0reca/opencove', number: 5, author: 'mallory' },
     })
@@ -166,7 +233,7 @@ describe('github-issues issue.assign', () => {
     expect(fake.ghCalls.some(args => args[0] === 'api')).toBe(false)
   })
 
-  it('launches again a todo task that a failed earlier attempt left without an agent', async () => {
+  it('launches again a todo task that a failed earlier attempt left in its worktree Space', async () => {
     const fake = createFakeHost({
       gh: ghFor({ author: 'C0reca' }),
       nodes: [
@@ -174,6 +241,7 @@ describe('github-issues issue.assign', () => {
           id: 'task-old',
           kind: 'task',
           title: '#5 Login bug',
+          spaceId: 'space-1',
           data: { kind: 'task', tags: ['issue:c0reca/opencove#5'], status: 'todo' },
         },
       ],
@@ -182,8 +250,36 @@ describe('github-issues issue.assign', () => {
     const result = await runAssign(fake, PARAMS)
 
     expect(fake.created).toHaveLength(0)
+    expect(fake.processCalls.map(call => call.args[0])).toEqual([])
     expect(fake.launches).toHaveLength(1)
-    expect(result).toMatchObject({ taskNodeId: 'task-old', reused: true, agentFullAccess: false })
+    expect(fake.launches[0]).toMatchObject({
+      target: { projectId: 'p1', spaceId: 'space-1' },
+      taskNodeId: 'task-old',
+    })
+    expect(result).toMatchObject({
+      taskNodeId: 'task-old',
+      reused: true,
+      agentPermissionMode: 'default',
+    })
+  })
+
+  it('refuses a todo task on the project canvas, because it has no worktree', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [
+        {
+          id: 'task-canvas',
+          kind: 'task',
+          title: '#5 Login bug',
+          data: { kind: 'task', tags: ['issue:c0reca/opencove#5'], status: 'todo' },
+        },
+      ],
+    })
+
+    await expect(runAssign(fake, PARAMS)).rejects.toMatchObject({
+      code: 'task-not-in-worktree',
+    })
+    expect(fake.launches).toHaveLength(0)
   })
 
   it('never relaunches a task that is already doing', async () => {
@@ -207,31 +303,24 @@ describe('github-issues issue.assign', () => {
       number: 5,
       taskNodeId: 'task-live',
       agentNodeId: null,
-      agentFullAccess: null,
+      agentPermissionMode: null,
       reused: true,
     })
   })
 
-  it('launches a reused task inside the Space the task lives in', async () => {
-    const fake = createFakeHost({
-      gh: ghFor({ author: 'C0reca' }),
-      nodes: [
-        {
-          id: 'task-s',
-          kind: 'task',
-          title: '#5 Login bug',
-          spaceId: 'space-1',
-          data: { kind: 'task', tags: ['issue:c0reca/opencove#5'], status: 'todo' },
-        },
-      ],
-    })
+  it('refuses a no-agent issue from the CLI with a coded error and launches nothing', async () => {
+    const fake = createFakeHost({ gh: ghFor({ author: 'C0reca', labels: ['no-agent'] }) })
 
-    await runAssign(fake, PARAMS)
+    await expect(runAssign(fake, PARAMS)).rejects.toMatchObject({ code: 'no-agent' })
+    expect(fake.created).toHaveLength(0)
+    expect(fake.launches).toHaveLength(0)
+  })
 
-    expect(fake.launches[0]).toMatchObject({
-      target: { projectId: 'p1', spaceId: 'space-1' },
-      taskNodeId: 'task-s',
-    })
+  it('assigns a no-agent issue from the human menu action', async () => {
+    const fake = createFakeHost({ gh: ghFor({ author: 'C0reca', labels: ['no-agent'] }) })
+
+    await expect(runAssign(fake, PARAMS, MENU)).resolves.toMatchObject({ number: 5, reused: false })
+    expect(fake.launches).toHaveLength(1)
   })
 
   it.each([0, -1, 1.5, '5', Number.NaN])('rejects number %s', async number => {
@@ -241,6 +330,15 @@ describe('github-issues issue.assign', () => {
       code: 'invalid-params',
     })
     expect(fake.ghCalls).toHaveLength(0)
+  })
+
+  it('refuses worktree false, because every issue agent has a worktree', async () => {
+    const fake = createFakeHost({ gh: ghFor({ author: 'C0reca' }) })
+
+    await expect(runAssign(fake, { ...PARAMS, worktree: false })).rejects.toMatchObject({
+      code: 'invalid-params',
+    })
+    expect(fake.launches).toHaveLength(0)
   })
 
   it('rejects an empty projectId', async () => {
@@ -264,19 +362,14 @@ describe('github-issues issue.assign-untrusted', () => {
     expect(fake.launches).toHaveLength(0)
   })
 
-  it('assigns an untrusted author from a menu invocation and launches without full access', async () => {
+  it('assigns an untrusted author from a menu invocation in normal mode', async () => {
     const fake = createFakeHost({
       gh: ghFor({ author: 'mallory', permission: ok('{"permission":"read"}') }),
     })
 
-    const result = await runAssign(
-      fake,
-      PARAMS,
-      { pluginId: 'github-issues', host: { surface: 'sidebar', projectId: 'p1' } },
-      'issue.assign-untrusted',
-    )
+    const result = await runAssign(fake, PARAMS, MENU, 'issue.assign-untrusted')
 
-    expect(result).toMatchObject({ number: 5, reused: false, agentFullAccess: false })
+    expect(result).toMatchObject({ number: 5, reused: false, agentPermissionMode: 'default' })
     expect(fake.launches).toHaveLength(1)
     expect(fake.ghCalls.some(args => args[0] === 'api')).toBe(false)
   })

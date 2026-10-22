@@ -22,17 +22,19 @@ describe('github-issues preferences', () => {
     expect([...map.keys()]).toEqual(['o/r'])
   })
 
-  it('parses autoApproveRepos from commas and newlines, tolerating case and spaces', () => {
+  it('parses the legacy auto-approve-repos list from commas and newlines', () => {
     expect(parseRepoList(' C0Reca/OpenCove, other/repo\nbad-entry\n')).toEqual(
       new Set(['c0reca/opencove', 'other/repo']),
     )
   })
 
-  it('treats missing preferences as empty', () => {
+  it('treats missing preferences as empty, with every repository in normal mode', () => {
     const policy = readTrustPolicy({})
 
     expect(policy.trustedAuthors.size).toBe(0)
-    expect(policy.autoApproveRepos.size).toBe(0)
+    expect(policy.permissionModes.exact.size).toBe(0)
+    expect(policy.permissionModes.wildcard.size).toBe(0)
+    expect(policy.permissionModes.legacy.size).toBe(0)
   })
 })
 

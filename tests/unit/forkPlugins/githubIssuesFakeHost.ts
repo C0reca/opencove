@@ -73,6 +73,14 @@ export function unwrapLaunch(command: string, args: string[]): Launch {
   const env = args.slice(0, start)
   const program = args[start] ?? ''
   const rest = args.slice(start + 1)
+  if (program === '/bin/sh' && rest[0] === '-c') {
+    // The guard's info/exclude write: recorded by the fake host, never executed.
+    return { program, args: rest, env, repo: null, reply: ok('') }
+  }
+  if (program === 'git' && rest[0] === 'rev-parse') {
+    // The worktree's common git directory (outside the worktree, as in a linked worktree).
+    return { program, args: rest, env, repo: null, reply: ok(`${COMMON_GIT_DIR}\n`) }
+  }
   if (program === '/bin/sh') {
     // Login-shell lookup `command -v <tool>`: answers as installed under /opt/homebrew/bin.
     const tool = (rest[1] ?? '').split(' ').at(-1) ?? ''
@@ -95,6 +103,11 @@ export function unwrapLaunch(command: string, args: string[]): Launch {
 }
 export const failed = (error: string): GhReply => ({ status: 'completed', exitCode: 1, error })
 
+export const COMMON_GIT_DIR = '/Users/me/repo/.git'
+// The working directory the host resolves for a Space: a worktree path per Space id.
+export const worktreeDirOf = (spaceId: string) => `/Users/me/.opencove/worktrees/${spaceId}`
+export const PROJECT_DIR = '/Users/me/repo'
+
 export function createFakeHost({
   gh,
   prefs = {},
@@ -113,6 +126,11 @@ export function createFakeHost({
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
   const updates: Array<{ nodeId: string; data: Record<string, unknown> }> = []
+  // Files the plugin wrote through host.filesystem, keyed by `${spaceId ?? 'project'}:${path}`.
+  const files = new Map<string, string>()
+  const dirs: string[] = []
+  // Shell scripts the plugin ran (the info/exclude append), recorded as argv.
+  const shellCalls: string[][] = []
   const nodes = new Map<string, FakeNode>(seeded.map(node => [node.id, node]))
   const operations = new Map<string, GhReply>()
   let sequence = 0
@@ -122,12 +140,42 @@ export function createFakeHost({
       list: async () => ({
         projects: projects.map(id => ({ id, name: id, spaces: id === 'p1' ? spaces : [] })),
       }),
+      resolve: async ({ projectId, spaceId }: { projectId: string; spaceId?: string }) => ({
+        projectId,
+        spaceId: spaceId ?? null,
+        workingDirectory: spaceId ? worktreeDirOf(spaceId) : PROJECT_DIR,
+      }),
+    },
+    filesystem: {
+      mkdir: async ({ target, path }: { target: { spaceId?: string }; path: string }) => {
+        const key = `${target.spaceId ?? 'project'}:${path}`
+        if (dirs.includes(key)) {
+          throw new Error('already_exists')
+        }
+        dirs.push(key)
+        return { target, uri: path }
+      },
+      writeText: async ({
+        target,
+        path,
+        content,
+      }: {
+        target: { spaceId?: string }
+        path: string
+        content: string
+      }) => {
+        files.set(`${target.spaceId ?? 'project'}:${path}`, content)
+        return { target, uri: path }
+      },
     },
     operations: {
       start: async ({ command, args }: { command?: string; args: string[] }) => {
         const launch = unwrapLaunch(command ?? 'gh', args)
         let reply: GhReply
-        if (launch.program === 'opencove') {
+        if (launch.program === '/bin/sh' && launch.args[0] === '-c' && launch.reply) {
+          shellCalls.push(launch.args)
+          reply = launch.reply
+        } else if (launch.program === 'opencove') {
           if (launch.args[0] !== '--help') {
             processCalls.push({ command: launch.program, args: launch.args })
           }
@@ -244,5 +292,18 @@ export function createFakeHost({
     },
   }
 
-  return { host, ghCalls, rawGhCalls, processCalls, launches, created, updates, nodes, reads }
+  return {
+    host,
+    ghCalls,
+    rawGhCalls,
+    processCalls,
+    launches,
+    created,
+    updates,
+    nodes,
+    reads,
+    files,
+    dirs,
+    shellCalls,
+  }
 }
