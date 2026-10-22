@@ -272,6 +272,30 @@ describe('plugin canvas routing over two authenticated Workers', () => {
         agentFullAccess: false,
       })
       expect(normal.node).toMatchObject({ kind: 'agent', data: { provider: 'codex' } })
+      const autoMode = await host<CreateNodeResult>('agents.launch', {
+        target,
+        prompt: 'Inspect in auto mode',
+        provider: 'codex',
+        agentPermissionMode: 'auto',
+      })
+      expect(autoMode.node).toMatchObject({ kind: 'agent' })
+      await expect(
+        host('agents.launch', {
+          target,
+          prompt: 'x',
+          provider: 'codex',
+          agentPermissionMode: 'auto',
+          agentFullAccess: true,
+        }),
+      ).rejects.toThrow('either agentPermissionMode or agentFullAccess')
+      await expect(
+        host('agents.launch', {
+          target,
+          prompt: 'x',
+          provider: 'codex',
+          agentPermissionMode: 'bypass',
+        }),
+      ).rejects.toThrow('agentPermissionMode')
       expect(await host('agents.get', { nodeId: agent.node.id })).toMatchObject({
         node: { id: agent.node.id },
         session: { status: 'running' },

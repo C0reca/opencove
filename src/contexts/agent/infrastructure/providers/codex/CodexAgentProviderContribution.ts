@@ -66,7 +66,7 @@ export class CodexAgentProviderContribution implements AgentProviderContribution
         prompt: command.prompt,
         model: command.model,
         resumeSessionId: command.resumeSessionId,
-        agentFullAccess: command.agentFullAccess,
+        agentPermissionMode: command.agentPermissionMode,
         injectedArgs: telemetry.args,
       })
       return {

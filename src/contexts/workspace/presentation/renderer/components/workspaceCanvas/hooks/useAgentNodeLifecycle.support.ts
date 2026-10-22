@@ -1,3 +1,4 @@
+import { resolveAgentPermissionMode } from '@shared/utils/agentPermissionMode'
 import type { Node } from '@xyflow/react'
 import { toFileUri } from '@contexts/filesystem/domain/fileUri'
 import type { LaunchAgentSessionResult, TerminalRuntimeKind } from '@shared/contracts/dto'
@@ -114,7 +115,7 @@ export async function launchAgentRuntime({
   })
 
   // A node created with an explicit permission mode keeps it; legacy nodes follow the global setting.
-  const effectiveAgentFullAccess = node.data.agent.agentFullAccess ?? agentFullAccess
+  const agentPermissionMode = resolveAgentPermissionMode(node.data.agent, agentFullAccess)
 
   if (mountId) {
     const cwd = executionDirectory.trim()
@@ -132,7 +133,7 @@ export async function launchAgentRuntime({
         resumeSessionId: mode === 'resume' ? resumeSessionId : null,
         ...(executablePathOverride ? { executablePathOverride } : {}),
         ...(Object.keys(mergedEnv).length > 0 ? { env: mergedEnv } : {}),
-        agentFullAccess: effectiveAgentFullAccess,
+        agentPermissionMode,
         cols: launchGeometry.terminalGeometry.cols,
         rows: launchGeometry.terminalGeometry.rows,
       },
@@ -165,7 +166,7 @@ export async function launchAgentRuntime({
     resumeSessionId: mode === 'resume' ? resumeSessionId : null,
     ...(executablePathOverride ? { executablePathOverride } : {}),
     ...(Object.keys(mergedEnv).length > 0 ? { env: mergedEnv } : {}),
-    agentFullAccess: effectiveAgentFullAccess,
+    agentPermissionMode,
     cols: launchGeometry.terminalGeometry.cols,
     rows: launchGeometry.terminalGeometry.rows,
   })

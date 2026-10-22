@@ -143,25 +143,41 @@ function persistedAgentNode(stateStore: { written: NodeControlAppState[] }) {
 
 describe('node.create agent permission mode', () => {
   it.each([true, false])(
-    'persists an explicit agentFullAccess=%s on the agent node',
+    'persists an explicit agentFullAccess=%s as agentPermissionMode on the agent node',
     async value => {
       const { result, stateStore } = await createAgent({ agentFullAccess: value })
       expect(result.ok).toBe(true)
-      expect(persistedAgentNode(stateStore)).toMatchObject({ agentFullAccess: value })
+      expect(persistedAgentNode(stateStore)).toMatchObject({
+        agentPermissionMode: value ? 'full' : 'default',
+      })
+      expect(persistedAgentNode(stateStore)).not.toHaveProperty('agentFullAccess')
     },
   )
 
-  it('does not persist agentFullAccess on the agent node when omitted', async () => {
+  it.each(['default', 'auto', 'full'])(
+    'persists an explicit agentPermissionMode=%s and forwards it to session.launchAgent',
+    async mode => {
+      const { result, stateStore, launchAgent } = await createAgent({ agentPermissionMode: mode })
+      expect(result.ok).toBe(true)
+      expect(persistedAgentNode(stateStore)).toMatchObject({ agentPermissionMode: mode })
+      expect(launchAgent.mock.calls[0]?.[1]).toMatchObject({ agentPermissionMode: mode })
+    },
+  )
+
+  it('does not persist a permission mode on the agent node when omitted', async () => {
     const { result, stateStore } = await createAgent({})
     expect(result.ok).toBe(true)
     expect(persistedAgentNode(stateStore)).not.toHaveProperty('agentFullAccess')
+    expect(persistedAgentNode(stateStore)).not.toHaveProperty('agentPermissionMode')
   })
 
   it.each([true, false])('forwards agentFullAccess=%s to session.launchAgent', async value => {
     const { result, launchAgent } = await createAgent({ agentFullAccess: value })
     expect(result.ok).toBe(true)
     // the handler is invoked as (ctx, payload)
-    expect(launchAgent.mock.calls[0]?.[1]).toMatchObject({ agentFullAccess: value })
+    expect(launchAgent.mock.calls[0]?.[1]).toMatchObject({
+      agentPermissionMode: value ? 'full' : 'default',
+    })
   })
 
   it('forwards an explicit agentFullAccess value to session.launchAgentInMount', async () => {
@@ -169,14 +185,14 @@ describe('node.create agent permission mode', () => {
     expect(result.ok).toBe(true)
     expect(launchAgent.mock.calls[0]?.[1]).toMatchObject({
       mountId: 'mount-1',
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
   })
 
   it('does not forward agentFullAccess when omitted', async () => {
     const { result, launchAgent } = await createAgent({})
     expect(result.ok).toBe(true)
-    expect(launchAgent.mock.calls[0]?.[1]).not.toHaveProperty('agentFullAccess')
+    expect(launchAgent.mock.calls[0]?.[1]).not.toHaveProperty('agentPermissionMode')
   })
 
   it.each(['false', 0, null, 'yes'])(

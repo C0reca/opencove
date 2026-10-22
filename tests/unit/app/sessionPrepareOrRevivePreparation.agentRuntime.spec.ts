@@ -430,7 +430,9 @@ describe('session prepare/revive agent runtime metadata', () => {
       })
 
       expect(launchPayloads).toHaveLength(1)
-      expect(launchPayloads[0]).toMatchObject({ agentFullAccess: expected })
+      expect(launchPayloads[0]).toMatchObject({
+        agentPermissionMode: expected ? 'full' : 'default',
+      })
     },
   )
 })

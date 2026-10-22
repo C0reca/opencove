@@ -24,6 +24,7 @@ import type {
 } from '@shared/contracts/normalizedPersistedAppState'
 import type {
   AgentHookInstallState,
+  AgentPermissionMode,
   AgentRecoveryIssue,
   CanvasImageMimeType,
   TerminalPtyGeometry,
@@ -89,6 +90,8 @@ export interface AgentNodeData {
   shouldCreateDirectory: boolean
   taskId: string | null
   /** Explicit permission mode from the launch that created the node; absent means follow the global setting. */
+  agentPermissionMode?: AgentPermissionMode
+  /** Legacy alias of agentPermissionMode (true = full, false = default). Read-only compatibility. */
   agentFullAccess?: boolean
 }
 

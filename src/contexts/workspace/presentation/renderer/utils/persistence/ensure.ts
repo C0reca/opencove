@@ -1,3 +1,4 @@
+import { readPersistedAgentPermissionFields } from '@shared/utils/agentPermissionMode'
 import type {
   AgentNodeData,
   ImageNodeData,
@@ -172,9 +173,7 @@ function ensurePersistedAgentData(value: unknown): AgentNodeData | null {
     shouldCreateDirectory:
       typeof record.shouldCreateDirectory === 'boolean' ? record.shouldCreateDirectory : false,
     taskId: normalizeOptionalString(record.taskId),
-    ...(typeof record.agentFullAccess === 'boolean'
-      ? { agentFullAccess: record.agentFullAccess }
-      : {}),
+    ...readPersistedAgentPermissionFields(record),
   }
 }
 

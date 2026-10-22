@@ -13,7 +13,7 @@ describe('managed Claude launch identity', () => {
         model: null,
         // A new launch must not reuse an ID retained from an earlier run.
         resumeSessionId: '11111111-1111-4111-8111-111111111111',
-        agentFullAccess: false,
+        agentPermissionMode: 'default',
         workspaceDirectory: '/tmp/shared-workspace',
         prompt: '- explain the change',
       }
@@ -53,7 +53,7 @@ describe('managed Claude launch identity', () => {
         mode: 'resume',
         model: null,
         resumeSessionId,
-        agentFullAccess: false,
+        agentPermissionMode: 'default',
         workspaceDirectory: '/tmp/shared-workspace',
       })
 

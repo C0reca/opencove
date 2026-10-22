@@ -338,6 +338,7 @@ export function registerRemoteAgentIpcHandlers(options: {
           resumeSessionId,
           env: payload?.env ?? null,
           ...(executablePathOverride ? { executablePathOverride } : {}),
+          agentPermissionMode: payload?.agentPermissionMode ?? null,
           agentFullAccess: payload?.agentFullAccess ?? null,
           ...(cols ? { cols } : {}),
           ...(rows ? { rows } : {}),

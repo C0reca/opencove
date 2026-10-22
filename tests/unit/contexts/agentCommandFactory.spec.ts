@@ -51,7 +51,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: '- implement login flow',
       model: 'gpt-5.2-codex',
       resumeSessionId: null,
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
 
     expect(command.command).toBe('codex')
@@ -75,7 +75,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: '',
       model: 'gpt-5.2-codex',
       resumeSessionId: '019c3e32-52ff-7b00-94ac-e6c5a56b4aa4',
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
 
     expect(command.command).toBe('codex')
@@ -119,7 +119,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: 'review failing tests',
       model: null,
       resumeSessionId: claudeSessionId,
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
 
     expect(command.command).toBe('claude')
@@ -140,7 +140,7 @@ describe('buildAgentLaunchCommand', () => {
       mode: 'resume',
       model: 'sonnet',
       resumeSessionId: claudeSessionId,
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
 
     expect(command.args).toEqual([
@@ -162,7 +162,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: 'review failing tests',
       model: null,
       resumeSessionId: claudeSessionId,
-      agentFullAccess: true,
+      agentPermissionMode: 'full',
     })
 
     expect(command.args).toEqual([
@@ -303,7 +303,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: 'Investigate the failing tests',
       model: 'gemini-3-flash-preview',
       resumeSessionId: null,
-      agentFullAccess: true,
+      agentPermissionMode: 'full',
     })
 
     expect(command.command).toBe('gemini')
@@ -325,7 +325,7 @@ describe('buildAgentLaunchCommand', () => {
       prompt: '',
       model: null,
       resumeSessionId: 'd7d89910-fa86-4253-a183-07db548da987',
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
 
     expect(command.command).toBe('gemini')

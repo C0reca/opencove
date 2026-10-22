@@ -14,6 +14,7 @@ import type {
   PersistedWorkspaceNodeKind,
 } from '@shared/contracts/persistedAppState'
 import { isFolderNodeData } from '@shared/utils/folderNodeData'
+import { isAgentPermissionMode } from '@shared/utils/agentPermissionMode'
 import {
   isAgentProvider,
   isAgentRuntimeStatus,
@@ -89,6 +90,7 @@ function isAgentNodeData(value: unknown): value is PersistedAgentNodeData {
     (value.customDirectory === undefined || isNullableString(value.customDirectory)) &&
     isOptionalBoolean(value.shouldCreateDirectory) &&
     (value.taskId === undefined || isNullableString(value.taskId)) &&
+    (value.agentPermissionMode === undefined || isAgentPermissionMode(value.agentPermissionMode)) &&
     isOptionalBoolean(value.agentFullAccess)
   )
 }

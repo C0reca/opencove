@@ -217,7 +217,7 @@ describe('space -> worktree -> task + agent chain (#7 headless)', () => {
         data: { prompt: 'fix', provider: 'codex', taskNodeId: taskId, agentFullAccess: false },
       }),
     )
-    expect(h.launches[0]).toMatchObject({ spaceId: childId, agentFullAccess: false })
+    expect(h.launches[0]).toMatchObject({ spaceId: childId, agentPermissionMode: 'default' })
 
     const session = await resolveSpaceWorkingDirectoryFromStore({
       spaceId: childId,

@@ -1,4 +1,4 @@
-import type { AgentLaunchMode, AgentProviderId } from '@shared/contracts/dto'
+import type { AgentLaunchMode, AgentPermissionMode, AgentProviderId } from '@shared/contracts/dto'
 
 export type BuiltinAgentCommandProviderId = Exclude<AgentProviderId, 'pi' | 'kimi'>
 
@@ -13,7 +13,8 @@ export interface BuildAgentLaunchCommandInput {
   prompt?: string
   model: string | null
   resumeSessionId: string | null
-  agentFullAccess?: boolean
+  /** Defaults to 'full' when omitted, matching the historical behaviour of this factory. */
+  agentPermissionMode?: AgentPermissionMode
   opencodeServer?: OpenCodeServerBinding | null
   injectedArgs?: readonly string[]
 }
@@ -57,18 +58,22 @@ function maybeTerminateOptionParsing(args: string[], value: string): void {
   }
 }
 
-function appendClaudeAccessArgs(args: string[], agentFullAccess: boolean): void {
-  if (agentFullAccess) {
+// Mapping of agentPermissionMode to provider flags:
+// - claude-code: default -> `--permission-mode default` (explicit, so it never inherits the user's own
+//   default mode, e.g. auto); auto -> `--permission-mode auto` (classifier-gated); full -> `--dangerously-skip-permissions`.
+// - codex: default and auto both keep the approval-gated sandbox (auto is not a Codex mode yet); full -> bypass.
+// - gemini / kimi / terminal catalog providers: only 'full' is full access, 'auto' counts as non-full.
+function appendClaudeAccessArgs(args: string[], agentPermissionMode: AgentPermissionMode): void {
+  if (agentPermissionMode === 'full') {
     args.push('--dangerously-skip-permissions')
     return
   }
 
-  // Explicit, so "off" never falls back to the user's own default mode (e.g. auto mode).
-  args.push('--permission-mode', 'default')
+  args.push('--permission-mode', agentPermissionMode)
 }
 
-function appendCodexAccessArgs(args: string[], agentFullAccess: boolean): void {
-  if (agentFullAccess) {
+function appendCodexAccessArgs(args: string[], agentPermissionMode: AgentPermissionMode): void {
+  if (agentPermissionMode === 'full') {
     args.push('--dangerously-bypass-approvals-and-sandbox')
     return
   }
@@ -79,7 +84,7 @@ function appendCodexAccessArgs(args: string[], agentFullAccess: boolean): void {
 export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): AgentLaunchCommand {
   const effectiveModel = normalizeOptionalValue(input.model)
   const resumeSessionId = normalizeOptionalValue(input.resumeSessionId)
-  const agentFullAccess = input.agentFullAccess ?? true
+  const agentPermissionMode = input.agentPermissionMode ?? 'full'
 
   if (input.provider === 'claude-code') {
     if (!resumeSessionId) {
@@ -87,7 +92,7 @@ export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): Ag
     }
 
     const args: string[] = []
-    appendClaudeAccessArgs(args, agentFullAccess)
+    appendClaudeAccessArgs(args, agentPermissionMode)
 
     if (effectiveModel) {
       args.push('--model', effectiveModel)
@@ -176,7 +181,7 @@ export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): Ag
   if (input.provider === 'gemini') {
     const args: string[] = []
 
-    if (agentFullAccess) {
+    if (agentPermissionMode === 'full') {
       args.push('--yolo')
     }
 
@@ -222,7 +227,7 @@ export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): Ag
     }
 
     const args: string[] = []
-    appendCodexAccessArgs(args, agentFullAccess)
+    appendCodexAccessArgs(args, agentPermissionMode)
     args.push(...(input.injectedArgs ?? []))
     args.push('resume', resumeSessionId)
 
@@ -240,7 +245,7 @@ export function buildAgentLaunchCommand(input: BuildAgentLaunchCommandInput): Ag
   }
 
   const args: string[] = []
-  appendCodexAccessArgs(args, agentFullAccess)
+  appendCodexAccessArgs(args, agentPermissionMode)
 
   if (effectiveModel) {
     args.push('--model', effectiveModel)

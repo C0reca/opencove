@@ -1,3 +1,4 @@
+import { resolveAgentPermissionMode } from '../../../../shared/utils/agentPermissionMode'
 import { toFileUri } from '../../../../contexts/filesystem/domain/fileUri'
 import {
   clearResumeSessionBinding,
@@ -126,7 +127,7 @@ export async function prepareAgentNode(options: {
   }
   const isRemoteLaunchContext = isRemoteNodeWorkerBinding(agentLaunchContext.workerBinding)
 
-  const agentFullAccess = options.agent.agentFullAccess ?? settings.agentFullAccess
+  const agentPermissionMode = resolveAgentPermissionMode(options.agent, settings.agentFullAccess)
   const invokeAgentLaunch = async (mode: 'new' | 'resume'): Promise<LaunchAgentSessionResult> => {
     if (agentLaunchContext.mountId) {
       return await invokeCommand<LaunchAgentSessionResult>(controlSurface, ctx, {
@@ -140,7 +141,7 @@ export async function prepareAgentNode(options: {
           model: sanitizedAgent.model,
           resumeSessionId: mode === 'resume' ? sanitizedAgent.resumeSessionId : null,
           ...(Object.keys(mergedEnv).length > 0 ? { env: mergedEnv } : {}),
-          agentFullAccess,
+          agentPermissionMode,
           cols: initialGeometry.cols,
           rows: initialGeometry.rows,
         },
@@ -157,7 +158,7 @@ export async function prepareAgentNode(options: {
         model: sanitizedAgent.model,
         resumeSessionId: mode === 'resume' ? sanitizedAgent.resumeSessionId : null,
         ...(Object.keys(mergedEnv).length > 0 ? { env: mergedEnv } : {}),
-        agentFullAccess,
+        agentPermissionMode,
         cols: initialGeometry.cols,
         rows: initialGeometry.rows,
       },

@@ -213,6 +213,7 @@ export function createPluginCanvasHost(
               'prompt',
               'provider',
               'model',
+              'agentPermissionMode',
               'agentFullAccess',
               'taskNodeId',
             ],
@@ -227,6 +228,9 @@ export function createPluginCanvasHost(
               prompt: input.prompt,
               provider: input.provider,
               model: input.model,
+              ...(input.agentPermissionMode === undefined
+                ? {}
+                : { agentPermissionMode: input.agentPermissionMode }),
               ...(input.agentFullAccess === undefined
                 ? {}
                 : { agentFullAccess: input.agentFullAccess }),

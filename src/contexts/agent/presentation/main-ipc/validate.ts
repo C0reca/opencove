@@ -10,6 +10,7 @@ import type {
 import { normalizeProvider } from '../../../../app/main/ipc/normalize'
 import { isAbsolute, win32 } from 'node:path'
 import { createAppError } from '../../../../shared/errors/appError'
+import { readAgentPermissionInput } from '../../../../shared/utils/agentPermissionMode'
 import {
   resolveNodeScriptLaunch,
   type NodeScriptLaunchCommand,
@@ -298,8 +299,9 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentInput 
   const executablePathOverride =
     typeof record.executablePathOverride === 'string' ? record.executablePathOverride.trim() : ''
 
-  const agentFullAccess =
-    typeof record.agentFullAccess === 'boolean' ? record.agentFullAccess : true
+  // Absent means full access, as it always did for agent:launch.
+  const agentPermissionMode =
+    readAgentPermissionInput(record, 'agent:launch').agentPermissionMode ?? 'full'
 
   const cols =
     typeof record.cols === 'number' && Number.isFinite(record.cols) && record.cols > 0
@@ -332,7 +334,7 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentInput 
     resumeSessionId: resumeSessionId.length > 0 ? resumeSessionId : null,
     env,
     executablePathOverride: executablePathOverride.length > 0 ? executablePathOverride : null,
-    agentFullAccess,
+    agentPermissionMode,
     cols,
     rows,
   }

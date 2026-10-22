@@ -32,8 +32,9 @@ export class KimiAgentProviderContribution extends TerminalCliAgentProviderContr
     const model = normalizeOptionalValue(command.model)
     const resumeSessionId = normalizeOptionalValue(command.resumeSessionId)
     const prompt = command.prompt?.trim() ?? ''
+    const fullAccess = command.agentPermissionMode === 'full'
 
-    if (command.mode === 'new' && prompt.length > 0 && !command.agentFullAccess) {
+    if (command.mode === 'new' && prompt.length > 0 && !fullAccess) {
       throw new Error(
         'Kimi prompt mode requires full access because the CLI forces auto permission.',
       )
@@ -41,7 +42,7 @@ export class KimiAgentProviderContribution extends TerminalCliAgentProviderContr
 
     const args: string[] = []
     const interactive = command.mode === 'resume' || prompt.length === 0
-    if (interactive && command.agentFullAccess) {
+    if (interactive && fullAccess) {
       args.push('--auto')
     }
     if (model) {

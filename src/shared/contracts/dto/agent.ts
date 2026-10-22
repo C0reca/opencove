@@ -33,6 +33,9 @@ import type { TerminalRuntimeKind } from './terminal'
 
 export type AgentLaunchMode = 'new' | 'resume'
 
+// Permission mode of an agent launch. Claude maps default/auto/full to its own flags; see AgentCommandFactory.
+export type AgentPermissionMode = 'default' | 'auto' | 'full'
+
 export interface ListAgentModelsInput {
   provider: AgentProviderId
   executablePathOverride?: string | null
@@ -119,6 +122,8 @@ export interface LaunchAgentInput {
   resumeSessionId?: string | null
   env?: Record<string, string> | null
   executablePathOverride?: string | null
+  agentPermissionMode?: AgentPermissionMode
+  /** Compatibility alias: true means 'full', false means 'default'. */
   agentFullAccess?: boolean
   cols?: number
   rows?: number

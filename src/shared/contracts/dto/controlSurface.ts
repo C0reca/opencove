@@ -1,4 +1,4 @@
-import type { AgentProviderId } from './agent'
+import type { AgentPermissionMode, AgentProviderId } from './agent'
 import type { TerminalPtyGeometry, TerminalRuntimeKind } from './terminal'
 import type { PresentationSnapshotTerminalResult } from './terminal'
 import type { WorkerEndpointKindDto } from './topology'
@@ -227,6 +227,8 @@ export interface LaunchAgentSessionInput {
   resumeSessionId?: string | null
   env?: Record<string, string> | null
   executablePathOverride?: string | null
+  agentPermissionMode?: AgentPermissionMode | null
+  /** Compatibility alias: true means 'full', false means 'default'. Both fields together are invalid. */
   agentFullAccess?: boolean | null
   cols?: number | null
   rows?: number | null
@@ -242,6 +244,8 @@ export interface LaunchAgentSessionInMountInput {
   resumeSessionId?: string | null
   env?: Record<string, string> | null
   executablePathOverride?: string | null
+  agentPermissionMode?: AgentPermissionMode | null
+  /** Compatibility alias: true means 'full', false means 'default'. Both fields together are invalid. */
   agentFullAccess?: boolean | null
   cols?: number | null
   rows?: number | null
@@ -367,6 +371,8 @@ export interface PreparedRuntimeAgentResult {
   customDirectory: string | null
   shouldCreateDirectory: boolean
   taskId: string | null
+  agentPermissionMode?: AgentPermissionMode
+  /** Legacy alias of agentPermissionMode, still read for nodes persisted before the mode existed. */
   agentFullAccess?: boolean
 }
 

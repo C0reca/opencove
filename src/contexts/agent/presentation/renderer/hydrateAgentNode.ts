@@ -1,3 +1,4 @@
+import { resolveAgentPermissionMode } from '@shared/utils/agentPermissionMode'
 import type { Node } from '@xyflow/react'
 import type {
   AgentNodeData,
@@ -170,7 +171,10 @@ export async function hydrateAgentNode({
     !isResumeSessionBindingVerified(sanitizedAgent) &&
     sanitizedAgent.prompt.trim().length === 0
   const terminalProfileId = node.data.profileId ?? agentSettings.defaultTerminalProfileId ?? null
-  const agentFullAccess = node.data.agent?.agentFullAccess ?? agentSettings.agentFullAccess
+  const agentPermissionMode = resolveAgentPermissionMode(
+    node.data.agent,
+    agentSettings.agentFullAccess,
+  )
   const env = resolveAgentLaunchEnv(agentSettings, sanitizedAgent.provider)
   const executablePathOverride = resolveAgentExecutablePathOverride(
     agentSettings,
@@ -189,7 +193,7 @@ export async function hydrateAgentNode({
         resumeSessionId: sanitizedAgent.resumeSessionId,
         ...(executablePathOverride ? { executablePathOverride } : {}),
         ...(Object.keys(env).length > 0 ? { env } : {}),
-        agentFullAccess,
+        agentPermissionMode,
         cols: 80,
         rows: 24,
       })
@@ -242,7 +246,7 @@ export async function hydrateAgentNode({
         model: sanitizedAgent.model,
         ...(executablePathOverride ? { executablePathOverride } : {}),
         ...(Object.keys(env).length > 0 ? { env } : {}),
-        agentFullAccess,
+        agentPermissionMode,
         cols: 80,
         rows: 24,
       })
