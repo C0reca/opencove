@@ -1,3 +1,4 @@
+import { readPersistedAgentPermissionFields } from '@shared/utils/agentPermissionMode'
 import type {
   PrepareOrReviveSessionInput,
   PreparedRuntimeAgentResult,
@@ -105,9 +106,7 @@ export function normalizePersistedAgent(value: unknown): PersistedAgentLike | nu
     customDirectory: normalizeOptionalString(value.customDirectory),
     shouldCreateDirectory: value.shouldCreateDirectory === true,
     taskId: normalizeOptionalString(value.taskId),
-    ...(typeof value.agentFullAccess === 'boolean'
-      ? { agentFullAccess: value.agentFullAccess }
-      : {}),
+    ...readPersistedAgentPermissionFields(value),
   }
 }
 

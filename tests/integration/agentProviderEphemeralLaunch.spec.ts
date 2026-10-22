@@ -167,7 +167,7 @@ function launchCommand(provider: AgentProviderId) {
     prompt: 'Explain the change',
     model: null,
     resumeSessionId: null,
-    agentFullAccess: true,
+    agentPermissionMode: 'full' as const,
     workspaceDirectory: homedir(),
     executablePathOverride:
       provider === 'claude-code' ? 'claude' : provider === 'codex' ? 'codex' : provider,

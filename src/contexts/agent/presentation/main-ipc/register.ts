@@ -312,7 +312,7 @@ export function registerAgentIpcHandlers(
           prompt: normalized.prompt,
           model: normalized.model ?? null,
           resumeSessionId: normalized.resumeSessionId ?? null,
-          agentFullAccess: normalized.agentFullAccess ?? true,
+          agentPermissionMode: normalized.agentPermissionMode ?? 'full',
           opencodeServer,
           executablePathOverride,
           workspaceDirectory: normalized.cwd,

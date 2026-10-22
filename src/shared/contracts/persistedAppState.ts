@@ -1,5 +1,6 @@
 import type {
   AgentLaunchMode,
+  AgentPermissionMode,
   AgentProviderId,
   BrowserMode,
   CanvasImageMimeType,
@@ -91,6 +92,8 @@ export interface PersistedAgentNodeData {
   shouldCreateDirectory?: boolean
   taskId?: string | null
   /** Explicit permission mode from the launch that created the node; absent means follow the global setting. */
+  agentPermissionMode?: AgentPermissionMode
+  /** Legacy alias of agentPermissionMode (true = full, false = default). Read-only compatibility. */
   agentFullAccess?: boolean
 }
 

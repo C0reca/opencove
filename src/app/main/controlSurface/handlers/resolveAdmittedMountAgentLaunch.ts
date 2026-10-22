@@ -27,7 +27,7 @@ export async function resolveAdmittedMountAgentLaunch(input: {
       promptLength: payload.prompt.length,
       resumeSessionIdPresent: !!payload.resumeSessionId,
       executablePathOverridePresent: !!payload.executablePathOverride,
-      agentFullAccess: payload.agentFullAccess ?? null,
+      agentPermissionMode: payload.agentPermissionMode ?? null,
       cols: payload.cols ?? null,
       rows: payload.rows ?? null,
     },

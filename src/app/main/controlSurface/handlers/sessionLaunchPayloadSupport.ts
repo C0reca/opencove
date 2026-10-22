@@ -1,3 +1,4 @@
+import { readAgentPermissionInput } from '../../../../shared/utils/agentPermissionMode'
 import { fromFileUri } from '../../../../contexts/filesystem/domain/fileUri'
 import {
   AGENT_PROVIDER_IDS,
@@ -99,7 +100,7 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentSessio
     })
   }
 
-  const agentFullAccess = payload.agentFullAccess
+  const permissionInput = readAgentPermissionInput(payload, 'session.launchAgent')
   const modeRaw = payload.mode
   if (modeRaw !== undefined && modeRaw !== null && typeof modeRaw !== 'string') {
     throw createAppError('common.invalid_input', {
@@ -115,16 +116,6 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentSessio
   ) {
     throw createAppError('common.invalid_input', {
       debugMessage: 'Invalid payload for session.launchAgent resumeSessionId.',
-    })
-  }
-
-  if (
-    agentFullAccess !== undefined &&
-    agentFullAccess !== null &&
-    typeof agentFullAccess !== 'boolean'
-  ) {
-    throw createAppError('common.invalid_input', {
-      debugMessage: 'Invalid payload for session.launchAgent agentFullAccess.',
     })
   }
 
@@ -148,7 +139,7 @@ export function normalizeLaunchAgentPayload(payload: unknown): LaunchAgentSessio
       payload.executablePathOverride === undefined || payload.executablePathOverride === null
         ? null
         : normalizeOptionalString(payload.executablePathOverride),
-    agentFullAccess: agentFullAccess ?? null,
+    agentPermissionMode: permissionInput.agentPermissionMode ?? null,
     cols: normalizeOptionalPositiveInt(payload.cols),
     rows: normalizeOptionalPositiveInt(payload.rows),
   }

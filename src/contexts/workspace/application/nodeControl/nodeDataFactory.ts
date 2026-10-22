@@ -1,6 +1,7 @@
 import { resolveLaunchedAgentResumeBinding } from '../../../agent/domain/agentResumeBinding'
 import { randomUUID } from 'node:crypto'
 import type {
+  AgentPermissionMode,
   AgentProviderId,
   CanvasNodeFrameDto,
   ManagedCanvasNodeKind,
@@ -9,6 +10,7 @@ import type {
   WebsiteWindowSessionMode,
 } from '../../../../shared/contracts/dto'
 import { resolveWebsiteNavigationUrl } from '../../../../shared/utils/websiteUrl'
+import { readAgentPermissionInput } from '../../../../shared/utils/agentPermissionMode'
 import { createAppError } from '../../../../shared/errors/appError'
 import { resolveInitialAgentRuntimeStatus } from '../../../agent/domain/agentRuntimeStatus'
 import {
@@ -39,7 +41,7 @@ export type NodeControlCreateData =
       prompt: string
       provider: AgentProviderId | null
       model: string | null
-      agentFullAccess?: boolean
+      agentPermissionMode?: AgentPermissionMode
       taskNodeId?: string
     }
   | { kind: 'terminal'; shell: string | null; command: string | null; profileId: string | null }
@@ -141,18 +143,6 @@ function normalizeAgentProvider(value: unknown): AgentProviderId | null {
   throw createAppError('common.invalid_input', { debugMessage: 'Invalid agent provider.' })
 }
 
-function normalizeAgentFullAccess(value: unknown): { agentFullAccess?: boolean } {
-  if (value === undefined) {
-    return {}
-  }
-  if (typeof value === 'boolean') {
-    return { agentFullAccess: value }
-  }
-  throw createAppError('common.invalid_input', {
-    debugMessage: 'node.create agent data.agentFullAccess must be a boolean.',
-  })
-}
-
 function normalizeAgentTaskNodeId(value: unknown): { taskNodeId?: string } {
   if (value === undefined) {
     return {}
@@ -226,7 +216,7 @@ export function normalizeCreateNodeData(
       prompt: typeof record.prompt === 'string' ? record.prompt : '',
       provider: normalizeAgentProvider(record.provider),
       model: normalizeOptionalString(record.model),
-      ...normalizeAgentFullAccess(record.agentFullAccess),
+      ...readAgentPermissionInput(record, 'node.create agent data', { nullIsAbsent: false }),
       ...normalizeAgentTaskNodeId(record.taskNodeId),
     }
   }
@@ -376,8 +366,8 @@ export function makeNode(options: {
           customDirectory: null,
           shouldCreateDirectory: false,
           taskId: options.data.kind === 'agent' ? (options.data.taskNodeId ?? null) : null,
-          ...(options.data.kind === 'agent' && options.data.agentFullAccess !== undefined
-            ? { agentFullAccess: options.data.agentFullAccess }
+          ...(options.data.kind === 'agent' && options.data.agentPermissionMode !== undefined
+            ? { agentPermissionMode: options.data.agentPermissionMode }
             : {}),
         }
       : null

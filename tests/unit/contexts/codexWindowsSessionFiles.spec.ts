@@ -23,7 +23,7 @@ describe('Windows Codex session file policy', () => {
         mode: 'resume',
         resumeSessionId: 'saved-session',
         model: null,
-        agentFullAccess: false,
+        agentPermissionMode: 'default',
         workspaceDirectory: process.cwd(),
       })
       expect(plan.args).toEqual([

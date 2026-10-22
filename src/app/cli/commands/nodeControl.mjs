@@ -39,6 +39,23 @@ function readBooleanFlagValue(args, flag) {
   fail(`invalid boolean for ${flag}: ${raw}`)
 }
 
+const AGENT_PERMISSION_MODES = ['default', 'auto', 'full']
+
+function readPermissionModeFlagValue(args, flag) {
+  const sawFlag = args.includes(flag)
+  const raw = readFlagValue(args, flag)
+  if (!raw) {
+    if (sawFlag) {
+      fail(`missing required flag: ${flag} <default|auto|full>`)
+    }
+    return null
+  }
+  if (AGENT_PERMISSION_MODES.includes(raw)) {
+    return raw
+  }
+  fail(`invalid permission mode for ${flag}: ${raw} (expected default, auto or full)`)
+}
+
 function readJsonFlag(args, flag) {
   const raw = readFlagValue(args, flag)
   if (!raw) {
@@ -111,11 +128,13 @@ function buildCreateData(kind, args) {
   }
   if (kind === 'agent') {
     const agentFullAccess = readBooleanFlagValue(args, '--full-access')
+    const agentPermissionMode = readPermissionModeFlagValue(args, '--permission-mode')
     const taskNodeId = args.includes('--task') ? requireFlagValue(args, '--task') : null
     return {
       prompt: readFlagValue(args, '--prompt') ?? '',
       provider: readFlagValue(args, '--provider'),
       model: readFlagValue(args, '--model'),
+      ...(agentPermissionMode === null ? {} : { agentPermissionMode }),
       ...(agentFullAccess === null ? {} : { agentFullAccess }),
       ...(taskNodeId ? { taskNodeId } : {}),
     }

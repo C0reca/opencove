@@ -1,3 +1,4 @@
+import { resolveAgentPermissionMode } from '../../../../shared/utils/agentPermissionMode'
 import type { ControlSurface } from '../controlSurface'
 import type { PersistenceStore } from '../../../../platform/persistence/sqlite/PersistenceStore'
 import type { ApprovedWorkspaceStore } from '../../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStore'
@@ -119,7 +120,7 @@ export function registerSessionHandlers(
           promptLength: payload.prompt.length,
           resumeSessionIdPresent: !!resumeSessionId,
           executablePathOverridePresent: !!payload.executablePathOverride,
-          agentFullAccess: payload.agentFullAccess ?? null,
+          agentPermissionMode: payload.agentPermissionMode ?? null,
           cols: payload.cols ?? null,
           rows: payload.rows ?? null,
         },
@@ -169,7 +170,7 @@ export function registerSessionHandlers(
                 resumeSessionId,
                 env: payload.env ?? null,
                 executablePathOverride: payload.executablePathOverride ?? null,
-                agentFullAccess: payload.agentFullAccess ?? null,
+                agentPermissionMode: payload.agentPermissionMode ?? null,
                 cols: payload.cols,
                 rows: payload.rows,
               } satisfies LaunchAgentSessionInput & { mountId: string; cwdUri: string | null },
@@ -228,14 +229,14 @@ export function registerSessionHandlers(
       const executablePathOverride =
         payload.executablePathOverride ??
         resolveAgentExecutablePathOverride(agentSettings, provider)
-      const agentFullAccess = payload.agentFullAccess ?? agentSettings.agentFullAccess
+      const agentPermissionMode = resolveAgentPermissionMode(payload, agentSettings.agentFullAccess)
       logAgentLaunchInfo('control-surface-resolved-settings', 'Resolved agent launch settings.', {
         provider,
         mode,
         cwd: workingDirectory,
         modelPresent: !!model,
         executablePathOverridePresent: !!executablePathOverride,
-        agentFullAccess,
+        agentPermissionMode,
         cols: payload.cols ?? 80,
         rows: payload.rows ?? 24,
       })
@@ -263,7 +264,7 @@ export function registerSessionHandlers(
         model,
         resumeSessionId,
         prompt: payload.prompt,
-        agentFullAccess,
+        agentPermissionMode,
         opencodeServer,
         executablePathOverride,
       })

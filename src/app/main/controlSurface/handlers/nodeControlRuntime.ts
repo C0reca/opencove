@@ -75,7 +75,9 @@ export function createRuntimeDeps(
     validateTarget: ctx.validateNodeTarget,
     launchAgent: async (resolved, data) => {
       const permissionMode =
-        data.agentFullAccess === undefined ? {} : { agentFullAccess: data.agentFullAccess }
+        data.agentPermissionMode === undefined
+          ? {}
+          : { agentPermissionMode: data.agentPermissionMode }
       const payload = resolved.mount
         ? {
             mountId: resolved.mount.mountId,

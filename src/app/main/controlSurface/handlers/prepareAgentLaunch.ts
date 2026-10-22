@@ -1,12 +1,16 @@
 import type { AgentProviderRegistry } from '../../../../contexts/agent/application/services/AgentProviderRegistry'
 import { createManagedAgentLaunchPlan } from '../../../../contexts/agent/application/use-cases/createManagedAgentLaunchPlan'
 import type { AgentLaunchCommand } from '../../../../contexts/agent/infrastructure/cli/AgentCommandFactory'
-import type { AgentLaunchMode, AgentProviderId } from '../../../../shared/contracts/dto'
+import type {
+  AgentLaunchMode,
+  AgentPermissionMode,
+  AgentProviderId,
+} from '../../../../shared/contracts/dto'
 import { resolveWorkerAgentTestStub } from './sessionAgentTestStub'
 
 export async function prepareAgentLaunch(options: {
   profileId?: string | null
-  agentFullAccess: boolean
+  agentPermissionMode: AgentPermissionMode
   cwd: string
   executablePathOverride: string | null
   mode: AgentLaunchMode
@@ -25,7 +29,7 @@ export async function prepareAgentLaunch(options: {
       prompt: options.mode === 'new' ? options.prompt : '',
       model: options.model,
       resumeSessionId: options.resumeSessionId,
-      agentFullAccess: options.agentFullAccess,
+      agentPermissionMode: options.agentPermissionMode,
       opencodeServer: options.opencodeServer,
       executablePathOverride: options.executablePathOverride,
       workspaceDirectory: options.cwd,

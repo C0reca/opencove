@@ -130,7 +130,7 @@ describe('persisted agentFullAccess during hydration', () => {
     })
 
     expect(launch).toHaveBeenLastCalledWith(
-      expect.objectContaining({ mode: 'new', agentFullAccess: false }),
+      expect.objectContaining({ mode: 'new', agentPermissionMode: 'default' }),
     )
     expect(hydrated.data.agent).toMatchObject({ agentFullAccess: false })
   })
@@ -150,7 +150,7 @@ describe('persisted agentFullAccess during hydration', () => {
       expect.objectContaining({
         mode: 'resume',
         resumeSessionId: assignedSessionId,
-        agentFullAccess: true,
+        agentPermissionMode: 'full',
       }),
     )
   })
@@ -167,7 +167,7 @@ describe('persisted agentFullAccess during hydration', () => {
     })
 
     expect(launch).toHaveBeenLastCalledWith(
-      expect.objectContaining({ mode: 'resume', agentFullAccess: false }),
+      expect.objectContaining({ mode: 'resume', agentPermissionMode: 'default' }),
     )
   })
 
@@ -178,7 +178,9 @@ describe('persisted agentFullAccess during hydration', () => {
       agentSettings: offSettings,
     })
 
-    expect(launch).toHaveBeenLastCalledWith(expect.objectContaining({ agentFullAccess: false }))
+    expect(launch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ agentPermissionMode: 'default' }),
+    )
   })
 
   it('never rewrites the persisted explicit value during runtime observation', async () => {

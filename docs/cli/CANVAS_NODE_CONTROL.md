@@ -35,7 +35,7 @@ Command:
 opencove node create note [space locator] [--title <text>] [--text <text>] [--frame <json>] [--focus] [--pretty]
 opencove node create task [space locator] --requirement <text> [--title <text>] [--priority <low|medium|high|urgent>] [--tag <tag>] [--frame <json>] [--focus] [--pretty]
 opencove node create website [space locator] --url <url> [--title <text>] [--pinned] [--session-mode <shared|incognito|profile>] [--profile <id>] [--frame <json>] [--focus] [--pretty]
-opencove node create agent [space locator] [--prompt <text>] [--provider <id>] [--model <id>] [--full-access <true|false>] [--task <nodeId>] [--frame <json>] [--focus] [--pretty]
+opencove node create agent [space locator] [--prompt <text>] [--provider <id>] [--model <id>] [--permission-mode <default|auto|full>] [--full-access <true|false>] [--task <nodeId>] [--frame <json>] [--focus] [--pretty]
 opencove node create terminal [space locator] [--shell <path>] [--command <text>] [--profile <id>] [--frame <json>] [--focus] [--pretty]
 opencove node update note --node <id> [--title <text>] [--text <text>] [--frame <json>] [--pretty]
 opencove node update task --node <id> [--title <text>] [--requirement <text>] [--priority <low|medium|high|urgent>] [--status <todo|doing|ai_done|done>] [--tag <tag>] [--frame <json>] [--pretty]
@@ -130,9 +130,10 @@ Website:
 Agent:
 
 - Create 会先通过 session launch path 启动 runtime。
-- `--full-access true|false`（DTO: `data.agentFullAccess`）显式选择本次启动的权限模式。省略时使用全局 Agent 设置 `agentFullAccess`（默认 `true`）；显式值优先于全局设置。只接受 boolean，其他值返回 `common.invalid_input`。
-- 显式值会持久化到 agent node 的 `agentFullAccess`；之后的 relaunch / 恢复优先使用它，只有没有该字段的旧数据才回退到全局设置。运行时观察不会改写该值。
-- Claude Code：`true` 传 `--dangerously-skip-permissions`；`false` 传 `--permission-mode default`（显式默认权限模式，即使用户级默认是 auto mode 也会覆盖为需要审批的模式）。新建与恢复两条路径一致。Codex 对 `false` 使用 `--sandbox workspace-write --ask-for-approval on-request`。
+- `--permission-mode default|auto|full`（DTO: `data.agentPermissionMode`）显式选择本次启动的权限模式。省略时使用全局 Agent 设置 `agentFullAccess`（默认 `true`）；显式值优先于全局设置。其他值返回 `common.invalid_input`。
+- `--full-access true|false`（DTO: `data.agentFullAccess`）是兼容别名：`true` 等于 `full`，`false` 等于 `default`。同时传 `--permission-mode` 与 `--full-access` 返回 `common.invalid_input`。
+- 显式模式会持久化到 agent node 的 `agentPermissionMode`；之后的 relaunch / 恢复优先使用它，其次是旧数据的 `agentFullAccess`，最后才是全局设置。运行时观察不会改写该值。
+- Claude Code：`full` 传 `--dangerously-skip-permissions`；`default` 传 `--permission-mode default`（显式默认权限模式，即使用户级默认是 auto mode 也会覆盖为需要审批的模式）；`auto` 传 `--permission-mode auto`（分类器审批）。新建与恢复两条路径一致。Codex 的 `default` 与 `auto` 都使用 `--sandbox workspace-write --ask-for-approval on-request`，`full` 使用 `--dangerously-bypass-approvals-and-sandbox`。
 - `--task <nodeId>`（DTO: `data.taskNodeId`）把新 agent 链接到同一 Space 中已存在的任务节点：双向写入 `agent.taskId` 与 `task.linkedAgentNodeId`，并将任务 `status` 设为 `doing`。任务必须存在、类型为 task、且没有存活的已链接 agent；否则在启动前返回 `node.not_found`（任务不存在）或 `common.invalid_input`。链接与 agent node 在同一次持久化写入中提交；启动失败或持久化失败时不留下链接，任务状态不变。
 - 启动失败时不持久化 agent node。
 - 持久化失败时 best-effort kill 已启动 session。

@@ -1,3 +1,4 @@
+import { resolveAgentPermissionMode } from '../../../../shared/utils/agentPermissionMode'
 import type { ControlSurface } from '../controlSurface'
 import type { PersistenceStore } from '../../../../platform/persistence/sqlite/PersistenceStore'
 import type { ApprovedWorkspaceStore } from '../../../../contexts/workspace/infrastructure/approval/ApprovedWorkspaceStore'
@@ -121,7 +122,7 @@ export function registerSessionLaunchAgentInMountHandler(
               resumeSessionId: payload.resumeSessionId ?? null,
               env: payload.env ?? null,
               executablePathOverride: payload.executablePathOverride ?? null,
-              agentFullAccess: payload.agentFullAccess ?? null,
+              agentPermissionMode: payload.agentPermissionMode ?? null,
               cols: payload.cols,
               rows: payload.rows,
             } satisfies LaunchAgentSessionInput,
@@ -250,7 +251,7 @@ export function registerSessionLaunchAgentInMountHandler(
       const executablePathOverride =
         payload.executablePathOverride ??
         resolveAgentExecutablePathOverride(agentSettings, provider)
-      const agentFullAccess = payload.agentFullAccess ?? agentSettings.agentFullAccess
+      const agentPermissionMode = resolveAgentPermissionMode(payload, agentSettings.agentFullAccess)
       logAgentLaunchInfo(
         'control-surface-mount-local-resolved-settings',
         'Resolved local mount agent launch settings.',
@@ -261,7 +262,7 @@ export function registerSessionLaunchAgentInMountHandler(
           cwd,
           modelPresent: !!model,
           executablePathOverridePresent: !!executablePathOverride,
-          agentFullAccess,
+          agentPermissionMode,
           cols: payload.cols ?? 80,
           rows: payload.rows ?? 24,
         },
@@ -280,7 +281,6 @@ export function registerSessionLaunchAgentInMountHandler(
         opencodeServer,
         userDataPath: deps.userDataPath,
       })
-
       const resumeSessionId = mode === 'resume' ? (payload.resumeSessionId ?? null) : null
       const { launchCommand, managedLaunch, testStub } = await prepareAgentLaunch({
         registry: deps.agentProviderRegistry,
@@ -291,7 +291,7 @@ export function registerSessionLaunchAgentInMountHandler(
         model,
         resumeSessionId,
         prompt: payload.prompt,
-        agentFullAccess,
+        agentPermissionMode,
         opencodeServer,
         executablePathOverride,
       })

@@ -109,6 +109,7 @@ describe('registerRemoteAgentIpcHandlers', () => {
           model: null,
           resumeSessionId: null,
           env: null,
+          agentPermissionMode: null,
           agentFullAccess: null,
         },
       },

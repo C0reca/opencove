@@ -19,7 +19,7 @@ function launchCommand(overrides: Record<string, unknown> = {}) {
     prompt: 'Explain the change',
     model: null,
     resumeSessionId: null,
-    agentFullAccess: true,
+    agentPermissionMode: 'full',
     workspaceDirectory: '/tmp/workspace',
     ...overrides,
   }
@@ -53,7 +53,7 @@ describe('PiAgentProviderContribution', () => {
         mode: 'resume',
         model: 'anthropic/claude-sonnet-4',
         resumeSessionId: 'pi-session-id',
-        agentFullAccess: false,
+        agentPermissionMode: 'default',
       }),
     )
 
@@ -91,7 +91,7 @@ describe('KimiAgentProviderContribution', () => {
     const provider = new KimiAgentProviderContribution()
 
     await expect(
-      provider.launcher.createLaunchPlan(launchCommand({ agentFullAccess: false })),
+      provider.launcher.createLaunchPlan(launchCommand({ agentPermissionMode: 'default' })),
     ).rejects.toThrow('Kimi prompt mode requires full access')
   })
 

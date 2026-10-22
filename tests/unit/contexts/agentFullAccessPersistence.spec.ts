@@ -9,6 +9,7 @@ import { ensurePersistedWorkspace } from '@contexts/workspace/presentation/rende
 import { toRuntimeNodes } from '@contexts/workspace/presentation/renderer/utils/nodeTransform'
 import { normalizePersistedAppState } from '@platform/persistence/sqlite/normalize'
 import { isPersistedNode } from '@shared/sync/persistedNodeValidation'
+import { resolveAgentPermissionMode } from '@shared/utils/agentPermissionMode'
 
 function agentNode(agent: Record<string, unknown>): Node<TerminalNodeData> {
   return {
@@ -95,6 +96,41 @@ describe('agent node persisted agentFullAccess', () => {
   it('rejects a non-boolean agentFullAccess as a persisted node shape', () => {
     const persisted = persistedNode(agentNode({}))
     persisted.workspaces[0].nodes[0].agent.agentFullAccess = 'false'
+
+    expect(isPersistedNode(persisted.workspaces[0].nodes[0])).toBe(false)
+  })
+})
+
+describe('agent node persisted agentPermissionMode', () => {
+  it.each(['default', 'auto', 'full'])('round-trips an explicit agentPermissionMode=%s', value => {
+    const persisted = persistedNode(agentNode({ agentPermissionMode: value }))
+
+    expect(isPersistedNode(persisted.workspaces[0].nodes[0])).toBe(true)
+    expect(restoreNode(persisted).data.agent).toMatchObject({ agentPermissionMode: value })
+  })
+
+  it('keeps legacy agentFullAccess-only nodes readable and resolvable', () => {
+    const restored = restoreNode(persistedNode(agentNode({ agentFullAccess: false })))
+    const agent = restored.data.agent as Record<string, unknown>
+
+    expect(agent).not.toHaveProperty('agentPermissionMode')
+    expect(agent).toMatchObject({ agentFullAccess: false, provider: 'claude-code' })
+    expect(resolveAgentPermissionMode(agent, true)).toBe('default')
+  })
+
+  it('keeps both fields when present, the mode winning on resolution', () => {
+    const restored = restoreNode(
+      persistedNode(agentNode({ agentPermissionMode: 'auto', agentFullAccess: true })),
+    )
+    const agent = restored.data.agent as Record<string, unknown>
+
+    expect(agent).toMatchObject({ agentPermissionMode: 'auto', agentFullAccess: true })
+    expect(resolveAgentPermissionMode(agent, false)).toBe('auto')
+  })
+
+  it('rejects an unknown agentPermissionMode as a persisted node shape', () => {
+    const persisted = persistedNode(agentNode({}))
+    persisted.workspaces[0].nodes[0].agent.agentPermissionMode = 'bypass'
 
     expect(isPersistedNode(persisted.workspaces[0].nodes[0])).toBe(false)
   })

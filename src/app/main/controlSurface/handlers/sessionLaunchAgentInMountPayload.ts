@@ -1,3 +1,4 @@
+import { readAgentPermissionInput } from '../../../../shared/utils/agentPermissionMode'
 import type { LaunchAgentSessionInMountInput } from '../../../../shared/contracts/dto'
 import { createAppError } from '../../../../shared/errors/appError'
 import { normalizeLaunchAgentEnv } from './sessionLaunchAgentEnv'
@@ -66,16 +67,7 @@ export function normalizeLaunchAgentInMountPayload(
     })
   }
 
-  const agentFullAccess = payload.agentFullAccess
-  if (
-    agentFullAccess !== undefined &&
-    agentFullAccess !== null &&
-    typeof agentFullAccess !== 'boolean'
-  ) {
-    throw createAppError('common.invalid_input', {
-      debugMessage: 'Invalid payload for session.launchAgentInMount agentFullAccess.',
-    })
-  }
+  const permissionInput = readAgentPermissionInput(payload, 'session.launchAgentInMount')
 
   const env = normalizeLaunchAgentEnv(payload.env)
   const executablePathOverride =
@@ -97,7 +89,7 @@ export function normalizeLaunchAgentInMountPayload(
       resumeSessionIdRaw === null ? null : normalizeOptionalString(resumeSessionIdRaw),
     env,
     executablePathOverride,
-    agentFullAccess: agentFullAccess ?? null,
+    agentPermissionMode: permissionInput.agentPermissionMode ?? null,
     cols: normalizeOptionalPositiveInt(payload.cols),
     rows: normalizeOptionalPositiveInt(payload.rows),
   }

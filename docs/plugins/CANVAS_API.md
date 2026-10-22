@@ -85,14 +85,17 @@ const output = await host.terminals.read({ nodeId: terminal.node.id });
   selects its default shell/profile. `command` is shell command text, not an argv
   array; a remote command requires an explicit target `shell`. For an executable
   plus argv and temporary progress/result, use `host.operations` instead.
-- `agents.launch({ target, title?, frame?, prompt, provider?, model?, agentFullAccess?, taskNodeId? })`
+- `agents.launch({ target, title?, frame?, prompt, provider?, model?, agentPermissionMode?, agentFullAccess?, taskNodeId? })`
   launches a regular Agent window with the target Worker's supported provider/runtime
-  rules. `agentFullAccess` is an optional boolean: `true` requests full access, `false`
-  requests the normal (approval-gated) permission mode, and omitting it uses the global
-  Agent setting. Any other value is rejected. The explicit value is stored on the node and
-  is used by later relaunches and resumes; nodes without it follow the global setting.
-  For Claude Code, `false` means Claude's explicit `default` permission mode
-  (`--permission-mode default`), which overrides a user-level default such as auto mode.
+  rules. `agentPermissionMode` is optional and one of `default`, `auto`, `full`:
+  `full` requests full access, `default` the normal approval-gated mode, `auto` Claude's
+  auto mode (Codex treats it as `default`). Omitting it uses the global Agent setting.
+  `agentFullAccess` is a compatibility alias: `true` is `full`, `false` is `default`.
+  Sending both fields, or any other value, is rejected with `common.invalid_input`. The
+  explicit mode is stored on the node as `agentPermissionMode` and used by later relaunches
+  and resumes; nodes without it follow the global setting.
+  For Claude Code, `default` is Claude's explicit `--permission-mode default`, which
+  overrides a user-level default such as auto mode; `auto` is `--permission-mode auto`.
   `taskNodeId` optionally links the new agent to an existing task node in the same
   Space: both sides are linked and the task moves to `doing`. The task must exist, be
   a task, and have no live linked agent. Otherwise the launch is rejected before it

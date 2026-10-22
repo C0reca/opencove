@@ -1,6 +1,7 @@
 import type {
   AgentLaunchMode,
   AgentHookInstallState,
+  AgentPermissionMode,
   AgentProviderAvailability,
   AgentProviderId,
 } from '../../../../shared/contracts/dto'
@@ -50,7 +51,7 @@ export interface AgentLaunchPlan {
 
 export interface CreateAgentLaunchPlanCommand {
   readonly profileId?: string | null
-  readonly agentFullAccess: boolean
+  readonly agentPermissionMode: AgentPermissionMode
   readonly artifacts: AgentLaunchArtifactRegistrar
   readonly executablePathOverride?: string | null
   readonly mode: AgentLaunchMode
