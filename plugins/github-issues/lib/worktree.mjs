@@ -2,8 +2,8 @@
 // same name. Runs the `opencove` CLI on the project's machine through host.operations, with argv
 // arrays only. The issue title is untrusted, so the name is reduced to [a-z0-9-] before use.
 import { commandError } from './errors.mjs'
-import { extractJson } from './gh.mjs'
-import { runProcess } from './runGh.mjs'
+import { extractJson, outputExcerpt } from './gh.mjs'
+import { runTool } from './runGh.mjs'
 
 export const SLUG_MAX_CHARS = 40
 const CLI_TIMEOUT_MS = 60_000
@@ -28,17 +28,13 @@ export function issueSpaceName(number, title) {
 
 // Maps a failed opencove run to a coded error. The CLI prints its JSON error to stdout and a hint
 // to stderr; both are searched.
-export function classifyOpencoveFailure({ exitCode = null, output = '', error = '' } = {}) {
-  const errorText = String(error ?? '')
-  const combined = `${String(output ?? '')}\n${errorText}`
-
-  if (/ENOENT|spawn opencove/i.test(errorText)) {
-    return {
-      code: 'cli-missing',
-      message:
-        'The opencove CLI is not on PATH on the project machine. Install it (Settings → Worker → CLI) and retry.',
-    }
-  }
+export function classifyOpencoveFailure({
+  status = 'failed',
+  exitCode = null,
+  output = '',
+  error = '',
+} = {}) {
+  const combined = `${String(output ?? '')}\n${String(error ?? '')}`
   if (/parent_missing_rect/.test(combined)) {
     return {
       code: 'parent_missing_rect',
@@ -49,20 +45,16 @@ export function classifyOpencoveFailure({ exitCode = null, output = '', error = 
   if (/already exists|already checked out|branch.*exist/i.test(combined)) {
     return {
       code: 'branch-exists',
-      message:
-        'A branch or worktree with this issue name already exists. Remove it or rename it first.',
+      message: `A branch or worktree with this issue name already exists. Remove it or rename it first. (${outputExcerpt(combined)})`,
     }
   }
-  const detail = combined
-    .split('\n')
-    .map(line => line.trim())
-    .find(line => line.length > 0)
+  const reason =
+    status === 'cancelled'
+      ? 'opencove was cancelled'
+      : `opencove failed (exit ${exitCode ?? 'unknown'})`
   return {
     code: 'cli-failed',
-    message: (detail
-      ? `opencove failed: ${detail}`
-      : `opencove failed (exit ${exitCode ?? 'unknown'})`
-    ).slice(0, 300),
+    message: `${reason}: ${outputExcerpt(combined) || '(no output)'}`.slice(0, 500),
   }
 }
 
@@ -144,7 +136,7 @@ export function selectRootSpace(spaces, { explicitParentSpaceId = null } = {}) {
   if (candidates.length === 0) {
     throw commandError(
       'no-root-space',
-      'The project has no root Space to hold issue worktrees. Create or place its root Space on the canvas, or pass parentSpaceId.',
+      'The project has no Space to hold issue worktrees. Draw one Space on the project canvas (it becomes the root for issue Spaces), or pass parentSpaceId, then retry.',
     )
   }
   if (candidates.length > 1) {
@@ -172,17 +164,16 @@ export async function resolveRootSpace(host, projectId, { explicitParentSpaceId 
   if (!list) {
     throw commandError(
       'cli-unexpected-output',
-      'opencove space list did not report the project Spaces.',
+      `opencove space list did not report the project Spaces: ${outputExcerpt(listed.output) || '(no output)'}`,
     )
   }
   return selectRootSpace(normalizeSpaces(list), { explicitParentSpaceId })
 }
 
 async function runOpencove(host, projectId, args) {
-  const result = await runProcess(host, { projectId }, 'opencove', args, {
+  const result = await runTool(host, { projectId }, 'opencove', args, {
     timeoutMs: CLI_TIMEOUT_MS,
     classify: classifyOpencoveFailure,
-    label: 'opencove',
   })
   if (!result.ok) {
     return { ok: false, error: result.error }
@@ -215,7 +206,7 @@ export async function createIssueWorktree({ host, projectId, rootSpaceId, name }
   if (!spaceId) {
     throw commandError(
       'cli-unexpected-output',
-      'opencove space create did not report the new Space.',
+      `opencove space create did not report the new Space: ${outputExcerpt(created.output) || '(no output)'}`,
       {
         name,
       },

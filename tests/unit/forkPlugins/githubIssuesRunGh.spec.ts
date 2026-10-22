@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { resetGhPathCache, runGh } from '../../../plugins/github-issues/lib/runGh.mjs'
+import {
+  describeFailure,
+  resetGhPathCache,
+  runGh,
+  runTool,
+} from '../../../plugins/github-issues/lib/runGh.mjs'
+import { classifyOpencoveFailure } from '../../../plugins/github-issues/lib/worktree.mjs'
 
 type Reply = { exitCode: number; output?: string; error?: string }
 
@@ -83,5 +89,43 @@ describe('github-issues gh launcher', () => {
 
     installed = true
     expect((await runGh(host, target, ['issue', 'list'])).ok).toBe(true)
+  })
+
+  // Regression for #25: opencove ran as a bare command and failed with "exit 1" and no detail.
+  it('runs opencove by its resolved path through env, like gh', async () => {
+    const { host, calls } = hostAnswering(program =>
+      program === '/bin/sh'
+        ? { exitCode: 0, output: '/Users/me/.local/bin/opencove\r\n' }
+        : { exitCode: 0 },
+    )
+
+    expect((await runTool(host, target, 'opencove', ['space', 'list'])).ok).toBe(true)
+    const last = calls.at(-1)!
+    expect(last.command).toBe('/usr/bin/env')
+    expect(last.args).toContain('NO_COLOR=1')
+    expect(last.args.slice(-3)).toEqual(['/Users/me/.local/bin/opencove', 'space', 'list'])
+  })
+
+  it('reports a missing opencove CLI with every place it looked', async () => {
+    const { host } = hostAnswering(() => ({ exitCode: 1 }))
+
+    const result = await runTool(host, target, 'opencove', ['space', 'list'])
+
+    expect(result.ok).toBe(false)
+    expect(result.error.code).toBe('cli-missing')
+    expect(result.error.message).toContain('/opt/homebrew/bin/opencove')
+    expect(result.error.message).toContain('/.local/bin/opencove')
+    expect(result.error.message).toContain('Install CLI')
+  })
+
+  it('never reports a failure without the exit code and some detail', () => {
+    expect(describeFailure('git', { exitCode: 1 }).message).toBe('git failed (exit 1): (no output)')
+    expect(classifyOpencoveFailure({ exitCode: 1 }).message).toBe(
+      'opencove failed (exit 1): (no output)',
+    )
+    expect(
+      classifyOpencoveFailure({ exitCode: 2, output: '\u001b[31merror\u001b[0m: bad\r\nnext' })
+        .message,
+    ).toBe('opencove failed (exit 2): error: bad | next')
   })
 })

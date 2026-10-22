@@ -248,8 +248,5 @@ export function classifyGhFailure({
   const detail = outputExcerpt(combined)
   const reason =
     status === 'cancelled' ? 'gh was cancelled' : `gh failed (exit ${exitCode ?? 'unknown'})`
-  return {
-    code: 'gh-failed',
-    message: (detail ? `${reason}: ${detail}` : reason).slice(0, 500),
-  }
+  return { code: 'gh-failed', message: `${reason}: ${detail || '(no output)'}`.slice(0, 500) }
 }

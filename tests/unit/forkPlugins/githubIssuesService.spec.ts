@@ -130,13 +130,15 @@ describe('github-issues service', () => {
     expect(starts).toHaveLength(6)
   })
 
-  it('reports gh missing as an error entry for every project', async () => {
+  it('reports a failing git remote lookup as a detailed error entry for every project', async () => {
     const { host } = fakeHost({}, ['p1', 'p2'])
     const service = createIssueService({ host, now: () => 0 })
 
     const report = await service.listAllProjects()
 
     expect(report.repos).toEqual([])
-    expect(report.errors.map(error => error.code)).toEqual(['gh-missing', 'gh-missing'])
+    // git itself cannot run here, so each project reports the git failure with its detail.
+    expect(report.errors.map(error => error.code)).toEqual(['cli-failed', 'cli-failed'])
+    expect(report.errors[0].message).toMatch(/^git failed \(exit unknown\): ENOENT/)
   })
 })

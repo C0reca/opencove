@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
+import { resetGhPathCache } from '../../../plugins/github-issues/lib/runGh.mjs'
 import { activate } from '../../../plugins/github-issues/main.mjs'
 import {
   findChildSpaceId,
@@ -205,6 +206,8 @@ describe('github-issues root Space rule', () => {
 })
 
 describe('github-issues issue.assign with worktree', () => {
+  beforeEach(() => resetGhPathCache())
+
   it('lists the project Spaces, then creates the child Space and the worktree, with exact argument lists', async () => {
     const { fake, run } = await assignWith({}, { worktree: true })
 
