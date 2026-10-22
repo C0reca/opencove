@@ -30,7 +30,12 @@ export interface FakeHostOptions {
   sessions?: Record<string, string>
   outputs?: Record<string, string>
   projects?: string[]
+  // Where host.target.resolve says the target runs. 'unknown' omits endpointId; 'throws' fails.
+  locality?: 'local' | 'remote' | 'unknown' | 'throws'
 }
+
+// The endpointId of a remote Worker. Local targets report the registry id 'local'.
+export const REMOTE_ENDPOINT_ID = '7c1e0d2a-4b1f-4d8e-9a6c-2f0b5e8d1a33'
 
 // The real host returns the Worker hub's latest observation event, not a bare string, and the
 // hook channel reports a finished turn ('done') as 'standby' (#31). The fake mirrors that shape.
@@ -121,6 +126,7 @@ export function createFakeHost({
   projects = ['p1'],
   spaces = [],
   launchError,
+  locality = 'local',
 }: FakeHostOptions) {
   const reads: string[] = []
   const processCalls: Array<{ command: string; args: string[] }> = []
@@ -136,6 +142,7 @@ export function createFakeHost({
   const shellCalls: string[][] = []
   // Text and key writes the plugin sent to agent terminals, in order.
   const writes: Array<{ nodeId: string; data: string }> = []
+  const resolves: Array<{ projectId: string; spaceId?: string }> = []
   const nodes = new Map<string, FakeNode>(seeded.map(node => [node.id, node]))
   const operations = new Map<string, GhReply>()
   let sequence = 0
@@ -145,11 +152,20 @@ export function createFakeHost({
       list: async () => ({
         projects: projects.map(id => ({ id, name: id, spaces: id === 'p1' ? spaces : [] })),
       }),
-      resolve: async ({ projectId, spaceId }: { projectId: string; spaceId?: string }) => ({
-        projectId,
-        spaceId: spaceId ?? null,
-        workingDirectory: spaceId ? worktreeDirOf(spaceId) : PROJECT_DIR,
-      }),
+      resolve: async ({ projectId, spaceId }: { projectId: string; spaceId?: string }) => {
+        resolves.push({ projectId, spaceId })
+        if (locality === 'throws') {
+          throw new Error('target unavailable')
+        }
+        return {
+          projectId,
+          spaceId: spaceId ?? null,
+          ...(locality === 'unknown'
+            ? {}
+            : { endpointId: locality === 'local' ? 'local' : REMOTE_ENDPOINT_ID }),
+          workingDirectory: spaceId ? worktreeDirOf(spaceId) : PROJECT_DIR,
+        }
+      },
     },
     filesystem: {
       mkdir: async ({ target, path }: { target: { spaceId?: string }; path: string }) => {
@@ -315,5 +331,6 @@ export function createFakeHost({
     dirs,
     shellCalls,
     writes,
+    resolves,
   }
 }

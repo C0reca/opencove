@@ -5,6 +5,7 @@ import { writeAgentGuard } from './agentSettings.mjs'
 import { normalizeAgentState } from './status.mjs'
 import { commandError } from './errors.mjs'
 import { corePermissionMode } from './permissions.mjs'
+import { effectiveModeFor } from './locality.mjs'
 import { findSeries } from './sequence.mjs'
 import {
   createIssueWorktree,
@@ -29,15 +30,24 @@ export function coordinatorPrompt(projectId) {
 
 // Decision: a coordinator is reused only while its agent session is running. A stopped or missing
 // session is not reused, so a fresh coordinator is launched in the existing coordinator Space.
-// `permissionMode` is the plugin mode of the project's repository (normal, auto or full).
-export async function launchCoordinator({ host, projectId, permissionMode, parentSpaceId = null }) {
+// `configuredMode` is the plugin mode of the project's repository (normal, auto or full). The mode
+// that runs is decided per launch by effectiveModeFor: auto and full need a local target.
+export async function launchCoordinator({ host, projectId, configuredMode, parentSpaceId = null }) {
   const listed = await host.nodes.list({ projectId, kind: 'agent' })
   const running = await findSeries(
     (listed.nodes ?? []).filter(node => node.title === COORDINATOR_TITLE),
     async node => ((await liveSession(host, node.id)) ? node : null),
   )
   if (running) {
-    return { nodeId: running.id, projectId, reused: true, agentPermissionMode: null }
+    return {
+      nodeId: running.id,
+      projectId,
+      reused: true,
+      configuredMode: null,
+      effectiveMode: null,
+      reason: null,
+      agentPermissionMode: null,
+    }
   }
 
   const spaceId = await coordinatorSpace(host, projectId, parentSpaceId)
@@ -48,7 +58,9 @@ export async function launchCoordinator({ host, projectId, permissionMode, paren
     spaceId,
     root: await targetWorkingDirectory(host, target),
   })
-  const agentPermissionMode = corePermissionMode(permissionMode)
+  // Local-only autonomy: the guard above is written in every mode; auto and full apply to local only.
+  const decision = await effectiveModeFor(host, target, configuredMode)
+  const agentPermissionMode = corePermissionMode(decision.effectiveMode)
   const launched = await host.agents.launch({
     target,
     title: COORDINATOR_TITLE,
@@ -60,7 +72,16 @@ export async function launchCoordinator({ host, projectId, permissionMode, paren
   if (!nodeId) {
     throw commandError('launch-failed', 'The coordinator agent was not created.')
   }
-  return { nodeId, projectId, spaceId, reused: false, agentPermissionMode }
+  return {
+    nodeId,
+    projectId,
+    spaceId,
+    reused: false,
+    configuredMode: decision.configuredMode,
+    effectiveMode: decision.effectiveMode,
+    reason: decision.reason,
+    agentPermissionMode,
+  }
 }
 
 // Decision: the dedicated Space is found by name, so a relaunch reuses it and its worktree.

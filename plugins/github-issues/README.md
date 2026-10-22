@@ -60,7 +60,7 @@ return JSON" (#22). The plugin therefore:
 | `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent in its own worktree Space. Space menu. |
 | `issue.request-review` | `projectId`, `number`, `summary`, `evidence` | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes. |
 
-`issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, permissionMode, agentPermissionMode, spaceId, branch, reused }`.
+`issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, configuredMode, effectiveMode, reason, agentPermissionMode, spaceId, branch, reused }`. `configuredMode` is the repository's mode, `effectiveMode` the mode that runs (see [Local projects only](#local-projects-only)), and `reason` is `null` or `remote-target` or `unknown-target`. `coordinator.launch` returns the same three fields.
 Example: `pnpm opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":5}'`.
 A CLI run refuses an issue whose author is not trusted (`untrusted-author`) and an issue labelled
 `no-agent` (`no-agent`).
@@ -106,6 +106,30 @@ C0reca/*: full
 | `full` | `full` | No permission prompts. |
 
 The guard applies in every mode, including `full`.
+
+### Local projects only
+
+`auto` and `full` apply only when the launch target is local. On a remote project (a Space or project
+whose mount is another machine, or whose location cannot be determined) the effective mode is
+`normal`, for the coordinator and for every issue agent. Nothing is refused: the launch proceeds in
+`normal`, and the result's `reason` says why (`remote-target` or `unknown-target`).
+
+Why: the PreToolUse guard hook runs the Worker's `process.execPath` and the installed plugin path.
+Those paths do not exist on a remote target. Claude Code treats a non-blocking hook error as allow,
+so the guard would fail open there and only the `permissions.deny` prefix rules would remain. Normal
+mode keeps the prompts, so the missing guard is not a silent loss of control.
+
+Locality is decided once per launch from `host.target.resolve` for the project and Space being
+launched. A local mount reports `endpointId: "local"`; remote endpoints have opaque registry ids.
+Any other answer, or a failed lookup, is treated as remote (fail closed). `normal` is never resolved.
+
+The guard file is still written in `normal` on remote targets, as defence in depth. If that write
+fails on a remote target, the launch fails as it always did, because the guard is written before the
+agent starts.
+
+The Sidebar shows the fallback in its top item, in place of the local warning:
+`⚠ auto configured, running in normal: remote project (guard cannot run there)`. Local `auto` and
+`full` keep `⚠ Agents run in auto mode` and `⚠ Agents run in full access`.
 
 **Migration from `auto-approve-repos`.** That preference is replaced by `permission-modes`. Until you
 migrate, a repository listed in `auto-approve-repos` counts as `full`, unless `permission-modes` has
@@ -345,8 +369,8 @@ Running agents are not stopped by `worktree archive`, so stop them in the UI fir
 - **Worktree:** the coordinator runs in a child Space and worktree named `issue-coordinator`. If a
   Space with that name exists, it is reused; otherwise it is created under the root Space. The Space
   menu's own Space is ignored.
-- **Permission mode:** the repository's mode from `permission-modes`, the same as issue agents.
-  It is no longer forced to normal.
+- **Permission mode:** the repository's mode from `permission-modes`, the same as issue agents, when
+  the project is local. On a remote project it runs in `normal` (see [Local projects only](#local-projects-only)).
 - **Reuse:** if an agent titled "Issue coordinator" in the project has a running session, the
   command returns it (`reused: true`) and launches nothing. A stopped coordinator is not reused,
   so a new one starts.
@@ -435,6 +459,7 @@ write has no carriage return.
 | `lib/service.mjs` | Ties lookups, caches and grouping together |
 | `lib/trust.mjs` | Preference parsing and the author trust decision (pure) |
 | `lib/permissions.mjs` | `permission-modes` parsing, precedence and migration; core mode mapping (pure) |
+| `lib/locality.mjs` | Local-only autonomy: the target's locality and the effective mode per launch |
 | `lib/agentSettings.mjs` | The guard written into each worktree: settings, deny and allow lists, `info/exclude` |
 | `guard/agentGuard.mjs` | The PreToolUse guard. `decide(input, worktreeRoot)` is pure |
 | `guard/tokenize.mjs` | The guard's shell-subset tokenizer (pure) |

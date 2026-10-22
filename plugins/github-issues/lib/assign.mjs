@@ -12,6 +12,7 @@ import { mapSeries, findSeries } from './sequence.mjs'
 import { runGh } from './runGh.mjs'
 import { composeRequirement, taskTag, taskTitle } from './requirement.mjs'
 import { permissionModeFor, corePermissionMode } from './permissions.mjs'
+import { effectiveModeFor } from './locality.mjs'
 import {
   createIssueWorktree,
   issueSpaceName,
@@ -149,8 +150,7 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
       body: issue.body,
     })
     const title = taskTitle(issueNumber, issue.title)
-    const permissionMode = permissionModeFor(policy.permissionModes, repo)
-    const agentPermissionMode = corePermissionMode(permissionMode)
+    const configuredMode = permissionModeFor(policy.permissionModes, repo)
 
     const existing = await findTaskByTag(project, tag)
     // Decision: a task that already has a launched agent (status not todo, or a linked agent) is
@@ -162,6 +162,9 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         number: issueNumber,
         taskNodeId: existing.id,
         agentNodeId: existing.data.linkedAgentNodeId ?? null,
+        configuredMode: null,
+        effectiveMode: null,
+        reason: null,
         agentPermissionMode: null,
         reused: true,
       }
@@ -202,6 +205,8 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         spaceId,
         root: await targetWorkingDirectory(host, target),
       })
+      // Local-only autonomy: auto and full apply to a local target; anything else runs in normal.
+      const decision = await effectiveModeFor(host, target, configuredMode)
       const taskNodeId = existing
         ? existing.id
         : (
@@ -219,7 +224,7 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         title,
         prompt: requirement,
         provider: providerId,
-        agentPermissionMode,
+        agentPermissionMode: corePermissionMode(decision.effectiveMode),
         taskNodeId,
       })
       return {
@@ -227,8 +232,10 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         number: issueNumber,
         taskNodeId,
         agentNodeId: launched?.node?.id ?? null,
-        permissionMode,
-        agentPermissionMode,
+        configuredMode: decision.configuredMode,
+        effectiveMode: decision.effectiveMode,
+        reason: decision.reason,
+        agentPermissionMode: corePermissionMode(decision.effectiveMode),
         spaceId,
         branch,
         reused: Boolean(existing),

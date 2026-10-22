@@ -50,10 +50,11 @@ export function buildReport(groups, repoIssues) {
 // Sidebar tree for one project, derived from a report that contains it.
 // isTrusted(author) decides whether an issue may be assigned by the plain command.
 // permissionMode (normal | auto | full) puts a visible warning first when it is not normal.
+// fallbackReason (remote-target | unknown-target) means auto or full is configured but runs in normal.
 export function sidebarItemsForProject(
   report,
   projectId,
-  { isTrusted = () => false, permissionMode = 'normal' } = {},
+  { isTrusted = () => false, permissionMode = 'normal', fallbackReason = null } = {},
 ) {
   const refresh = {
     id: 'refresh',
@@ -63,9 +64,7 @@ export function sidebarItemsForProject(
 
   const repo = report.repos.find(entry => entry.projectIds.includes(projectId))
   if (repo) {
-    const warning = MODE_WARNINGS[permissionMode]
-      ? [{ id: 'permission-mode-warning', label: MODE_WARNINGS[permissionMode] }]
-      : []
+    const warning = modeWarning(permissionMode, fallbackReason)
     if (repo.issues.length === 0) {
       return { items: [...warning, { id: 'empty', label: 'No open issues' }, refresh] }
     }
@@ -96,6 +95,28 @@ const MODE_WARNINGS = Object.freeze({
   auto: '⚠ Agents run in auto mode',
   full: '⚠ Agents run in full access',
 })
+
+const FALLBACK_PLACE = Object.freeze({
+  'remote-target': 'remote project (guard cannot run there)',
+  'unknown-target': 'project location unknown (guard cannot run there)',
+})
+
+// A configured auto or full that runs in normal (non-local project) is shown with its reason.
+function modeWarning(mode, fallbackReason) {
+  if (!MODE_WARNINGS[mode]) {
+    return []
+  }
+  if (!fallbackReason) {
+    return [{ id: 'permission-mode-warning', label: MODE_WARNINGS[mode] }]
+  }
+  const place = FALLBACK_PLACE[fallbackReason] ?? FALLBACK_PLACE['unknown-target']
+  return [
+    {
+      id: 'permission-mode-warning',
+      label: `⚠ ${mode} configured, running in normal: ${place}`,
+    },
+  ]
+}
 
 // Trusted issues assign with the plain command; others only with the human-only menu action.
 // no-agent issues stay listed, marked as excluded: the coordinator skips them, a person can assign.
