@@ -244,7 +244,7 @@ describe('github-issues issue.assign with worktree', () => {
     expect(fake.launches[0]).toMatchObject({
       target: { projectId: 'p1', spaceId: 'space-child' },
       taskNodeId: fake.created[0].id,
-      agentFullAccess: false,
+      agentPermissionMode: 'default',
     })
     expect(result).toMatchObject({ spaceId: 'space-child', branch: 'issue-5-login-bug' })
   })
@@ -410,27 +410,21 @@ describe('github-issues issue.assign with worktree', () => {
     })
   })
 
-  it('uses the worktree-repos preference by default, and an explicit false wins', async () => {
-    const preferred = await assignWith({ prefs: { 'worktree-repos': 'C0reca/OpenCove' } }, {})
-    await preferred.run()
-    expect(preferred.fake.processCalls.some(call => call.args[1] === 'create')).toBe(true)
-
-    const explicit = await assignWith(
-      { prefs: { 'worktree-repos': 'c0reca/opencove' } },
-      { worktree: false },
-    )
-    await explicit.run()
-    expect(explicit.fake.processCalls).toEqual([])
-    expect(explicit.fake.created[0].spaceId).toBeNull()
-  })
-
-  it('keeps the plain behaviour when worktree is not set and the repo is not listed', async () => {
+  it('always uses a worktree, even when the worktree parameter is not sent', async () => {
     const { fake, run } = await assignWith({}, {})
 
     await run()
 
+    expect(fake.processCalls.some(call => call.args[1] === 'create')).toBe(true)
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-child' })
+  })
+
+  it('refuses worktree false before any call, because no agent runs outside a worktree', async () => {
+    const { fake, run } = await assignWith({}, { worktree: false })
+
+    await expect(run()).rejects.toMatchObject({ code: 'invalid-params' })
     expect(fake.processCalls).toEqual([])
-    expect(fake.launches[0].target).toEqual({ projectId: 'p1' })
+    expect(fake.launches).toEqual([])
   })
 
   it('rejects a non-boolean worktree value before any call', async () => {

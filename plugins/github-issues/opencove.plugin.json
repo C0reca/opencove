@@ -35,7 +35,7 @@
       {
         "id": "issue.assign",
         "title": "Assign issue to agent",
-        "description": "Creates a task for a trusted issue (idempotent per issue) and launches a Claude Code agent on it. Refuses issues whose author is not trusted. worktree true (or worktree-repos) runs the agent in a child Space with its own git worktree under the project's root Space; parentSpaceId picks that root explicitly.",
+        "description": "Creates a task for a trusted issue (idempotent per issue) and launches a Claude Code agent on it in its own child Space and git worktree under the project's root Space. Refuses untrusted authors and no-agent issues (CLI). parentSpaceId picks the root explicitly. The repository's permission mode (permission-modes) applies.",
         "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"provider\":\"claude-code\"}'",
         "target": "plugin",
         "menus": ["sidebar"]
@@ -89,7 +89,7 @@
       {
         "id": "coordinator.launch",
         "title": "Start issue coordinator",
-        "description": "Starts a Claude Code agent that follows the issue-coordinator skill for one project. Always runs in normal permission mode. Reuses a coordinator whose session is still running.",
+        "description": "Starts a Claude Code agent that follows the issue-coordinator skill for one project, in the issue-coordinator Space and worktree (created if missing). It uses the repository's permission mode. Reuses a coordinator whose session is still running.",
         "usage": "--params '{\"projectId\":\"<id>\"}'",
         "target": "plugin",
         "menus": ["space"]
@@ -104,13 +104,6 @@
     ],
     "preferences": [
       {
-        "id": "worktree-repos",
-        "title": "Worktree repositories",
-        "description": "Comma or newline separated owner/repo list. Assigning an issue of these repositories (from the Sidebar or the CLI) creates a child Space with its own git worktree, unless worktree is passed explicitly.",
-        "type": "string",
-        "default": ""
-      },
-      {
         "id": "trusted-authors",
         "title": "Trusted issue authors",
         "description": "Extra authors whose issues may be assigned, one line per repository: owner/repo: alice, bob  or  *: alice. Adds to the defaults (repository owner, C0reca, collaborators with write access).",
@@ -118,9 +111,9 @@
         "default": ""
       },
       {
-        "id": "auto-approve-repos",
-        "title": "Auto-approve repositories",
-        "description": "Comma or newline separated owner/repo list. Agents launched for these repositories run with full access and no permission prompts.",
+        "id": "permission-modes",
+        "title": "Agent permission modes",
+        "description": "One line per repository: owner/repo: normal | auto | full, or owner/*: mode for every repository of an owner. The exact line wins over the wildcard. Default normal. Replaces auto-approve-repos, whose repositories count as full unless this sets them.",
         "type": "string",
         "default": ""
       }

@@ -1,6 +1,7 @@
 // Pure author-trust rules for issue.assign: preference parsing and the decision table.
 // Fail closed: anything missing or unparsable leaves the author untrusted.
 // The gh permission lookup itself lives in assign.mjs; permissionDecision only reads its answer.
+import { parsePermissionModes } from './permissions.mjs'
 
 export const MAINTAINER_LOGIN = 'c0reca'
 export const TRUSTED_PERMISSIONS = Object.freeze(['admin', 'maintain', 'write'])
@@ -55,12 +56,14 @@ export function parseTrustedAuthors(text) {
   return byScope
 }
 
-// Reads both trust preferences from a preference snapshot; missing values mean empty.
+// Reads the trust and permission preferences from a snapshot; missing values mean empty.
 export function readTrustPolicy(preferences) {
   return {
     trustedAuthors: parseTrustedAuthors(preferences?.['trusted-authors']),
-    autoApproveRepos: parseRepoList(preferences?.['auto-approve-repos']),
-    worktreeRepos: parseRepoList(preferences?.['worktree-repos']),
+    permissionModes: parsePermissionModes(
+      preferences?.['permission-modes'],
+      preferences?.['auto-approve-repos'],
+    ),
   }
 }
 

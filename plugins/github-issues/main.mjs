@@ -6,7 +6,8 @@ import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
-import { normalizeLogin, normalizeRepo, readTrustPolicy } from './lib/trust.mjs'
+import { permissionModeFor } from './lib/permissions.mjs'
+import { normalizeLogin, readTrustPolicy } from './lib/trust.mjs'
 
 // Thin wiring: parameter checks and command routing. Logic lives in lib/.
 export async function activate(context) {
@@ -46,11 +47,12 @@ export async function activate(context) {
           if (!projectId) {
             throw commandError('invalid-params', 'projectId is required')
           }
-          const spaceId = commandContext?.host?.spaceId
+          const repo = await service.repoForProject(projectId)
+          const policy = readTrustPolicy(await preferencesOf(commandContext))
           return launchCoordinator({
             host,
             projectId,
-            spaceId: typeof spaceId === 'string' && spaceId.length > 0 ? spaceId : undefined,
+            permissionMode: permissionModeFor(policy.permissionModes, repo),
           })
         }
         case 'agents.read':
@@ -119,7 +121,7 @@ export async function activate(context) {
     })
     return sidebarItemsForProject(report, projectId, {
       isTrusted: author => verdicts.get(normalizeLogin(author)) === true,
-      autoApprove: policy.autoApproveRepos.has(normalizeRepo(entry.repo)) === true,
+      permissionMode: permissionModeFor(policy.permissionModes, entry.repo),
     })
   }
 
@@ -133,6 +135,8 @@ export async function activate(context) {
       provider: params.provider,
       policy: readTrustPolicy(await preferencesOf(commandContext)),
       skipTrustCheck,
+      // Only the Sidebar menu carries host context; a CLI run is never a human decision.
+      humanMenu: Boolean(commandContext?.host),
       worktree: params.worktree,
       parentSpaceId: params.parentSpaceId,
     })
