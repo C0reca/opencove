@@ -127,7 +127,9 @@ describe('github-issues issue.assign', () => {
       number: 5,
       taskNodeId: fake.created[0].id,
       agentNodeId: expect.any(String),
-      permissionMode: 'normal',
+      configuredMode: 'normal',
+      effectiveMode: 'normal',
+      reason: null,
       agentPermissionMode: 'default',
       spaceId: 'space-child',
       branch: 'issue-5-login-bug',
@@ -185,7 +187,12 @@ describe('github-issues issue.assign', () => {
     const result = await runAssign(fake, PARAMS)
 
     expect(fake.launches[0].agentPermissionMode).toBe('full')
-    expect(result).toMatchObject({ permissionMode: 'full', agentPermissionMode: 'full' })
+    expect(result).toMatchObject({
+      configuredMode: 'full',
+      effectiveMode: 'full',
+      reason: null,
+      agentPermissionMode: 'full',
+    })
   })
 
   it('refuses an untrusted author with a structured error and writes nothing', async () => {
@@ -303,6 +310,9 @@ describe('github-issues issue.assign', () => {
       number: 5,
       taskNodeId: 'task-live',
       agentNodeId: null,
+      configuredMode: null,
+      effectiveMode: null,
+      reason: null,
       agentPermissionMode: null,
       reused: true,
     })

@@ -8,6 +8,7 @@ import { createWakeService } from './lib/wake.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { permissionModeFor } from './lib/permissions.mjs'
+import { effectiveModeFor } from './lib/locality.mjs'
 import { normalizeLogin, readTrustPolicy } from './lib/trust.mjs'
 
 // Thin wiring: parameter checks and command routing. Logic lives in lib/.
@@ -56,7 +57,7 @@ export async function activate(context) {
           return launchCoordinator({
             host,
             projectId,
-            permissionMode: permissionModeFor(policy.permissionModes, repo),
+            configuredMode: permissionModeFor(policy.permissionModes, repo),
           })
         }
         case 'agents.read':
@@ -118,6 +119,8 @@ export async function activate(context) {
       return sidebarItemsForProject(report, projectId)
     }
     const policy = readTrustPolicy(await preferencesOf(commandContext))
+    const configuredMode = permissionModeFor(policy.permissionModes, entry.repo)
+    const decision = await effectiveModeFor(host, { projectId }, configuredMode)
     const verdicts = await assigner.trustAuthors({
       projectId,
       repo: entry.repo,
@@ -126,7 +129,8 @@ export async function activate(context) {
     })
     return sidebarItemsForProject(report, projectId, {
       isTrusted: author => verdicts.get(normalizeLogin(author)) === true,
-      permissionMode: permissionModeFor(policy.permissionModes, entry.repo),
+      permissionMode: configuredMode,
+      fallbackReason: decision.reason,
     })
   }
 

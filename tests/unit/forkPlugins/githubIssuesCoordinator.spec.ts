@@ -88,6 +88,9 @@ describe('github-issues coordinator.launch', () => {
       projectId: 'p1',
       spaceId: 'space-created',
       reused: false,
+      configuredMode: 'normal',
+      effectiveMode: 'normal',
+      reason: null,
       agentPermissionMode: 'default',
     })
   })
@@ -164,6 +167,9 @@ describe('github-issues coordinator.launch', () => {
       nodeId: 'coord-live',
       projectId: 'p1',
       reused: true,
+      configuredMode: null,
+      effectiveMode: null,
+      reason: null,
       agentPermissionMode: null,
     })
   })
