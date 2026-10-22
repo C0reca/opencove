@@ -116,6 +116,13 @@
         "description": "One line per repository: owner/repo: normal | auto | full, or owner/*: mode for every repository of an owner. The exact line wins over the wildcard. Default normal. Replaces auto-approve-repos, whose repositories count as full unless this sets them.",
         "type": "string",
         "default": ""
+      },
+      {
+        "id": "coordinator-wake",
+        "title": "Wake the coordinator",
+        "description": "When an issue agent starts waiting or finishes, sends the running issue coordinator a short [github-issues] message so it runs its next loop without a manual nudge. Coalesced, and only while the coordinator is idle.",
+        "type": "boolean",
+        "default": true
       }
     ]
   }

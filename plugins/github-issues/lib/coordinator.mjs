@@ -2,6 +2,7 @@
 // playbook from the plugin skill, so the prompt only names the skill and the project. The agent
 // runs in its own worktree Space named issue-coordinator, under the project's root Space.
 import { writeAgentGuard } from './agentSettings.mjs'
+import { normalizeAgentState } from './status.mjs'
 import { commandError } from './errors.mjs'
 import { corePermissionMode } from './permissions.mjs'
 import { findSeries } from './sequence.mjs'
@@ -77,6 +78,21 @@ async function coordinatorSpace(host, projectId, parentSpaceId) {
     name: COORDINATOR_SPACE,
   })
   return made.spaceId
+}
+
+// Strict lookup for the wake-up service: a failed read throws, so the caller can tell "no
+// coordinator" (null) from "unknown" and keep its state. Returns the node with its observed state.
+export async function findRunningCoordinator(host, projectId) {
+  const listed = await host.nodes.list({ projectId, kind: 'agent' })
+  const titled = (listed.nodes ?? []).filter(item => item.title === COORDINATOR_TITLE)
+  return findSeries(titled, async node => {
+    const detail = await host.agents.get({ nodeId: node.id })
+    if (detail?.session?.status !== 'running') {
+      return null
+    }
+    const { state, observedAt } = normalizeAgentState(detail.agentState)
+    return { node, state, observedAt }
+  })
 }
 
 // A failed read counts as not running, so the caller launches a new coordinator instead.

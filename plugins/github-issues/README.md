@@ -242,6 +242,7 @@ refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar mark
 | `trusted-authors` | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty |
 | `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
 | `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
+| `coordinator-wake` | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator). | on |
 
 ### Human-only action
 
@@ -369,6 +370,58 @@ The skill escalates to a human on `untrusted-author`, on `no-agent` questions, o
 and on product decisions. Issue text is treated as data. The skill never mentions `gh pr merge`, and
 its tests fail if it does.
 
+### Waking the coordinator
+
+The coordinator works in turns, and nothing wakes it between them. Without a wake-up it stays
+idle after it assigns an issue, until someone sends it a message by hand. The plugin now sends that
+message.
+
+**Mechanism: a backend timer, not `host.events`.** `host.events` samples project, Space, node, session
+and preference changes. An agent's observed state (`agents.get().agentState`, the `working`,
+`waiting` or `done` signal) is not one of those types, so a change from `working` to `waiting` can
+produce no indication at all. The backend therefore runs one bounded timer (every 10 s). Each pass
+reads `agents.status` only for a project that has a running coordinator. The timer starts when the
+plugin activates and stops in `dispose()`. The lookup is strict: an unreadable coordinator keeps the
+state, and only a readable "no running coordinator" resets it.
+
+**Rules:**
+
+- **Which transitions:** an issue agent whose observed state changes to `waiting` or `done`. Its
+  first observation after the coordinator starts is a silent baseline, so older states are not
+  replayed.
+- **Coalescing:** transitions are queued and sent once, after 5 s with no new transition.
+- **Idle only:** the message is written only while the coordinator's observed state is `done` or
+  `waiting`. A `working` or unknown coordinator keeps the message queued.
+- **No repeats:** each transition is keyed by issue, state and `observedAt`, and is sent once. After a
+  wake, the next one waits until the coordinator has a new observation (or 2 minutes pass).
+- **No coordinator, no write:** a project without a running coordinator is skipped.
+- **Preference:** `coordinator-wake: false` stops all writes.
+
+**Message format.** One line, with the `[github-issues]` prefix, which is the only prefix the skill
+treats as a wake trigger:
+
+- `[github-issues] #43 agent is now waiting. Read it with agents.read and tell the human what it asks.`
+- `[github-issues] #43 agent is done. Run your next loop.`
+- Several transitions: `[github-issues] #43 agent is now waiting; #44 agent is done. Read it with agents.read and tell the human what it asks. Run your next loop.`
+
+**Paste protection workaround.** A long prompt plus `\r` in one write is treated by Claude Code as a
+paste: it shows "Removed 1 invisible character · review and press Enter" and does not submit. So the
+text and the Enter key are sent as two writes: the text first, then `\r` after 1.5 s. The first
+write has no carriage return.
+
+**Limits:**
+
+- The message is typed into the coordinator's terminal. If a person is typing there, the text is
+  appended to what they typed. The plugin cannot see that.
+- If the text write fails, the message stays queued. If the Enter write fails, the text may sit
+  unsent in the coordinator's input; the plugin does not resend it, so it is not doubled. A person
+  must submit it.
+- The reaction check assumes the coordinator's observation changes when it starts a turn. If it does
+  not, the next wake waits for the 2-minute hold.
+- The timer runs while the plugin backend runs. A plugin reload resets the baseline, so transitions
+  during the reload are not replayed.
+- Polling `agents.status` every 10 s costs a few host calls per project with a coordinator.
+
 ## Files
 
 | File | Purpose |
@@ -394,6 +447,7 @@ its tests fail if it does.
 | `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
 | `lib/coordinator.mjs` | `coordinator.launch`: prompt, the coordinator Space, reuse rule |
 | `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
+| `lib/wake.mjs` | Coordinator wake-up: transition detection, coalescing, idle gating, two-write submission |
 | `lib/worktree.mjs` | Worktree per issue: name sanitising, Space listing, CLI calls, error classes |
 | `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
 
