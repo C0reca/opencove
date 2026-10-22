@@ -4,6 +4,7 @@ import { launchCoordinator } from './lib/coordinator.mjs'
 import { commandError } from './lib/errors.mjs'
 import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
+import { createWakeService } from './lib/wake.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { permissionModeFor } from './lib/permissions.mjs'
@@ -15,6 +16,9 @@ export async function activate(context) {
   const service = createIssueService({ host })
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
   const closing = createClosingService({ host, repoOf: service.repoForProject })
+  // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
+  const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
+  wake.start()
 
   return {
     async runCommand(commandId, rawParams, commandContext) {
@@ -93,6 +97,7 @@ export async function activate(context) {
       }
     },
     async dispose() {
+      await wake.dispose()
       context.log('GitHub Issues stopped')
     },
   }

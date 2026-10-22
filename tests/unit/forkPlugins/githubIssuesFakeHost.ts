@@ -26,7 +26,7 @@ export interface FakeHostOptions {
   launchError?: string
   prefs?: Record<string, string>
   nodes?: FakeNode[]
-  agentStates?: Record<string, string>
+  agentStates?: Record<string, string | { state: string; at: number }>
   sessions?: Record<string, string>
   outputs?: Record<string, string>
   projects?: string[]
@@ -35,16 +35,19 @@ export interface FakeHostOptions {
 // The real host returns the Worker hub's latest observation event, not a bare string, and the
 // hook channel reports a finished turn ('done') as 'standby' (#31). The fake mirrors that shape.
 export const OBSERVED_AT_MS = Date.UTC(2026, 9, 22, 9, 49, 2)
-function hubObservation(nodeId: string, state: string | undefined) {
-  if (state === undefined) {
+// A string sets the state; an object also sets the observation time (for transition keys).
+function hubObservation(nodeId: string, entry: string | { state: string; at: number } | undefined) {
+  if (entry === undefined) {
     return null
   }
+  const state = typeof entry === 'string' ? entry : entry.state
+  const at = typeof entry === 'string' ? OBSERVED_AT_MS : entry.at
   return {
     sessionId: `session-${nodeId}`,
     state: state === 'done' ? 'standby' : state,
     source: 'claude_hook',
     hookInstallState: 'installed',
-    observedAtMs: OBSERVED_AT_MS,
+    observedAtMs: at,
   }
 }
 
@@ -131,6 +134,8 @@ export function createFakeHost({
   const dirs: string[] = []
   // Shell scripts the plugin ran (the info/exclude append), recorded as argv.
   const shellCalls: string[][] = []
+  // Text and key writes the plugin sent to agent terminals, in order.
+  const writes: Array<{ nodeId: string; data: string }> = []
   const nodes = new Map<string, FakeNode>(seeded.map(node => [node.id, node]))
   const operations = new Map<string, GhReply>()
   let sequence = 0
@@ -264,6 +269,10 @@ export function createFakeHost({
         }
         return { node: { id: agentId } }
       },
+      write: async ({ nodeId, data }: { nodeId: string; data: string }) => {
+        writes.push({ nodeId, data })
+        return { nodeId, sessionId: `session-${nodeId}`, accepted: true }
+      },
       read: async ({ nodeId }: { nodeId: string }) => {
         reads.push(nodeId)
         return {
@@ -305,5 +314,6 @@ export function createFakeHost({
     files,
     dirs,
     shellCalls,
+    writes,
   }
 }

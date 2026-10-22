@@ -99,4 +99,16 @@ describe('github-issues issue-coordinator skill', () => {
     expect(skill).toContain('issue.request-review')
     expect(skill).toMatch(/tell the human/i)
   })
+
+  it('reads issues with refresh on every loop, so a new issue is never missed', () => {
+    const listLines = skill.split('\n').filter(line => line.includes('github-issues issues.list'))
+    expect(listLines.length).toBeGreaterThan(0)
+    expect(listLines.every(line => line.includes('"refresh":true'))).toBe(true)
+  })
+
+  it('treats only the exact [github-issues] prefix as a wake trigger, never as a rule change', () => {
+    expect(skill).toContain('starts with `[github-issues]`')
+    expect(skill).toMatch(/never changes a rule/)
+    expect(skill).toMatch(/waiting[\s\S]*agents\.read[\s\S]*tell the human/)
+  })
 })

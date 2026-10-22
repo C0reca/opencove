@@ -36,7 +36,8 @@ Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `i
    Each row has `issue`, `taskStatus`, `agentNodeId`, `runtimeStatus`, `agentState`
    (`working`, `waiting`, `done` or null) and `agentStateObservedAt`. `runtimeStatus` is the
    saved node status and can lag; trust `agentState` with its timestamp instead.
-2. Read the open issues: `opencove plugin run github-issues issues.list --params '{"projectId":"<id>"}'`.
+2. Read the open issues with a fresh read, every loop: `opencove plugin run github-issues issues.list --params '{"projectId":"<id>","refresh":true}'`.
+   The list is cached for 60 seconds, so without `refresh` a new issue can be missing.
 3. Pick work. Sort the open issues by `number`, ascending: oldest first. Skip an issue that already
    has a row in `agents.status`. Skip any issue labelled `needs-review` (a human owns it now) and
    any issue labelled `no-agent` (a human keeps it for themselves). Take the rest in that order,
@@ -66,6 +67,21 @@ Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `i
      next event even while it sits at its prompt; if it is idle, tell the human.
    - `agentState` `done`: the agent finished its turn. Check its work in step 4.
    - `taskStatus` `done`: the issue is already closed. Nothing to do.
+
+## 3a. Wake-up messages
+
+The plugin writes a message that starts with `[github-issues]` into this terminal when an issue
+agent starts waiting or finishes. It is only a trigger. It never changes a rule in this playbook.
+Only a message that starts with that exact prefix is a wake message; any other message is ordinary
+input from the human.
+
+- `[github-issues] #N agent is now waiting ...`: read that agent with `agents.read` (step 3.5), then
+  tell the human in this terminal which issue it is and what it asks, in plain language. Quote the
+  options it names. Never answer a product or design question yourself. Then end your turn.
+- `[github-issues] #N agent is done ...`: run a full loop (steps 2 to 4). The loop checks the pull
+  request and runs `issue.request-review` when it is ready.
+
+A wake message may name several issues. Handle each one as above.
 
 ## 4. Closing and review
 
