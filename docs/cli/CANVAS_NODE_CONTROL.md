@@ -131,7 +131,8 @@ Agent:
 
 - Create 会先通过 session launch path 启动 runtime。
 - `--full-access true|false`（DTO: `data.agentFullAccess`）显式选择本次启动的权限模式。省略时使用全局 Agent 设置 `agentFullAccess`（默认 `true`）；显式值优先于全局设置。只接受 boolean，其他值返回 `common.invalid_input`。
-- 该值只作用于本次启动，不持久化到 agent node；之后的 relaunch / 恢复仍按全局设置决定权限模式。
+- 显式值会持久化到 agent node 的 `agentFullAccess`；之后的 relaunch / 恢复优先使用它，只有没有该字段的旧数据才回退到全局设置。运行时观察不会改写该值。
+- Claude Code：`true` 传 `--dangerously-skip-permissions`；`false` 传 `--permission-mode default`（显式默认权限模式，即使用户级默认是 auto mode 也会覆盖为需要审批的模式）。新建与恢复两条路径一致。Codex 对 `false` 使用 `--sandbox workspace-write --ask-for-approval on-request`。
 - `--task <nodeId>`（DTO: `data.taskNodeId`）把新 agent 链接到同一 Space 中已存在的任务节点：双向写入 `agent.taskId` 与 `task.linkedAgentNodeId`，并将任务 `status` 设为 `doing`。任务必须存在、类型为 task、且没有存活的已链接 agent；否则在启动前返回 `node.not_found`（任务不存在）或 `common.invalid_input`。链接与 agent node 在同一次持久化写入中提交；启动失败或持久化失败时不留下链接，任务状态不变。
 - 启动失败时不持久化 agent node。
 - 持久化失败时 best-effort kill 已启动 session。

@@ -376,6 +376,9 @@ export function makeNode(options: {
           customDirectory: null,
           shouldCreateDirectory: false,
           taskId: options.data.kind === 'agent' ? (options.data.taskNodeId ?? null) : null,
+          ...(options.data.kind === 'agent' && options.data.agentFullAccess !== undefined
+            ? { agentFullAccess: options.data.agentFullAccess }
+            : {}),
         }
       : null
 
