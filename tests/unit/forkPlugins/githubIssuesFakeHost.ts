@@ -58,9 +58,12 @@ export function unwrapLaunch(command: string, args: string[]): Launch {
   const program = args[start] ?? ''
   const rest = args.slice(start + 1)
   if (program === '/bin/sh') {
-    return { program, args: rest, env, repo: null, reply: ok('/opt/homebrew/bin/gh\n') }
+    // Login-shell lookup `command -v <tool>`: answers as installed under /opt/homebrew/bin.
+    const tool = (rest[1] ?? '').split(' ').at(-1) ?? ''
+    return { program, args: rest, env, repo: null, reply: ok(`/opt/homebrew/bin/${tool}\n`) }
   }
-  if (program.endsWith('/gh') || program === 'gh') {
+  const name = program.split('/').at(-1) ?? program
+  if (name === 'gh') {
     if (rest[0] === '--version') {
       return { program: 'gh-probe', args: rest, env, repo: null, reply: ok('gh version 2') }
     }
@@ -68,6 +71,9 @@ export function unwrapLaunch(command: string, args: string[]): Launch {
     const repo = at >= 0 ? (rest[at + 1] ?? null) : null
     const plain = at >= 0 ? [...rest.slice(0, at), ...rest.slice(at + 2)] : rest
     return { program: 'gh', args: plain, env, repo }
+  }
+  if (name === 'opencove') {
+    return { program: 'opencove', args: rest, env, repo: null }
   }
   return { program, args: rest, env, repo: null }
 }
@@ -106,7 +112,9 @@ export function createFakeHost({
         const launch = unwrapLaunch(command ?? 'gh', args)
         let reply: GhReply
         if (launch.program === 'opencove') {
-          processCalls.push({ command: launch.program, args: launch.args })
+          if (launch.args[0] !== '--help') {
+            processCalls.push({ command: launch.program, args: launch.args })
+          }
           reply = gh(launch.args, 'opencove')
         } else if (launch.program === 'gh') {
           rawGhCalls.push(launch)
