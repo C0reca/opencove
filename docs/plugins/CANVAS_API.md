@@ -89,8 +89,10 @@ const output = await host.terminals.read({ nodeId: terminal.node.id });
   launches a regular Agent window with the target Worker's supported provider/runtime
   rules. `agentFullAccess` is an optional boolean: `true` requests full access, `false`
   requests the normal (approval-gated) permission mode, and omitting it uses the global
-  Agent setting. Any other value is rejected. The choice applies to this launch only and
-  is not stored on the node, so a later relaunch uses the global setting.
+  Agent setting. Any other value is rejected. The explicit value is stored on the node and
+  is used by later relaunches and resumes; nodes without it follow the global setting.
+  For Claude Code, `false` means Claude's explicit `default` permission mode
+  (`--permission-mode default`), which overrides a user-level default such as auto mode.
   `taskNodeId` optionally links the new agent to an existing task node in the same
   Space: both sides are linked and the task moves to `doing`. The task must exist, be
   a task, and have no live linked agent. Otherwise the launch is rejected before it

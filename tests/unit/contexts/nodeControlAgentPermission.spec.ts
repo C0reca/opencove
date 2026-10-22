@@ -79,16 +79,20 @@ function createAppState(targetMountId: string | null): NodeControlAppState {
   } as unknown as NodeControlAppState
 }
 
-function createStateStore(initial: NodeControlAppState): NodeControlAppStateStore {
+function createStateStore(initial: NodeControlAppState) {
   let revision = 1
-  return {
+  const written: NodeControlAppState[] = []
+  const store: NodeControlAppStateStore & { written: NodeControlAppState[] } = {
+    written,
     readAppState: async () => initial,
     readAppStateRevision: async () => revision,
-    writeAppState: async () => {
+    writeAppState: async state => {
+      written.push(state)
       revision += 1
       return { ok: true, level: 'full', bytes: 1, revision }
     },
   }
+  return store
 }
 
 async function createAgent(data: unknown, options: { mounted?: boolean } = {}) {
@@ -111,13 +115,13 @@ async function createAgent(data: unknown, options: { mounted?: boolean } = {}) {
     handle: launchAgent,
     defaultErrorCode: 'agent.launch_failed',
   })
+  const stateStore = createStateStore(createAppState(options.mounted ? 'mount-1' : null))
   registerNodeControlHandlers(controlSurface, {
     topology: {
       listEndpoints: async () => ({ endpoints: [localEndpoint, remoteEndpoint] }),
       listMounts: async () => ({ mounts: options.mounted ? [mount] : [] }),
     } as WorkerTopologyStore,
-    getPersistenceStore: async () =>
-      createStateStore(createAppState(options.mounted ? 'mount-1' : null)) as never,
+    getPersistenceStore: async () => stateStore as never,
   })
   const result = await controlSurface.invoke(ctx, {
     kind: 'command',
@@ -128,10 +132,31 @@ async function createAgent(data: unknown, options: { mounted?: boolean } = {}) {
       data: { prompt: '', provider: 'codex', model: null, ...(data as object) },
     },
   })
-  return { result, launchAgent }
+  return { result, launchAgent, stateStore }
+}
+
+function persistedAgentNode(stateStore: { written: NodeControlAppState[] }) {
+  const lastState = stateStore.written.at(-1)
+  const node = lastState?.workspaces[0]?.nodes.find(candidate => candidate.kind === 'agent')
+  return node?.agent as Record<string, unknown> | null | undefined
 }
 
 describe('node.create agent permission mode', () => {
+  it.each([true, false])(
+    'persists an explicit agentFullAccess=%s on the agent node',
+    async value => {
+      const { result, stateStore } = await createAgent({ agentFullAccess: value })
+      expect(result.ok).toBe(true)
+      expect(persistedAgentNode(stateStore)).toMatchObject({ agentFullAccess: value })
+    },
+  )
+
+  it('does not persist agentFullAccess on the agent node when omitted', async () => {
+    const { result, stateStore } = await createAgent({})
+    expect(result.ok).toBe(true)
+    expect(persistedAgentNode(stateStore)).not.toHaveProperty('agentFullAccess')
+  })
+
   it.each([true, false])('forwards agentFullAccess=%s to session.launchAgent', async value => {
     const { result, launchAgent } = await createAgent({ agentFullAccess: value })
     expect(result.ok).toBe(true)
