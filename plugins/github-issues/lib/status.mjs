@@ -4,6 +4,22 @@ import { issueTagOf, listTaskNodes, parseIssueTag } from './tasks.mjs'
 
 const AGENT_STATES = new Set(['working', 'waiting', 'done'])
 
+// host.agents.get returns the Worker's latest observation event, e.g.
+// { state: 'waiting', source: 'claude_hook', observedAtMs, ... } (#31). The hook channel reports a
+// finished turn ('done') as 'standby'. Plain strings are accepted too. Unknown shapes are null.
+export function normalizeAgentState(value) {
+  const raw = typeof value === 'string' ? value : value?.state
+  const state = raw === 'standby' ? 'done' : raw
+  if (!AGENT_STATES.has(state)) {
+    return { state: null, observedAt: null }
+  }
+  const at = value?.observedAtMs
+  return {
+    state,
+    observedAt: Number.isFinite(at) ? new Date(at).toISOString() : null,
+  }
+}
+
 export async function collectAgentStatus(host, projectIds) {
   const rows = await mapSeries(projectIds, projectId => statusForProject(host, projectId))
   return rows.flat()
@@ -29,7 +45,9 @@ async function statusForProject(host, projectId) {
       taskStatus: task.data.status ?? null,
       agentNodeId: agent?.id ?? null,
       runtimeStatus: agent?.status ?? null,
-      agentState: agent ? await agentStateOf(host, agent.id) : null,
+      ...(agent
+        ? await agentObservation(host, agent.id)
+        : { agentState: null, agentStateObservedAt: null }),
     }
   })
 }
@@ -71,11 +89,17 @@ function legacyAgentForTask(agents, task, issue) {
 }
 
 // A failed read is not evidence either way, so it reports null rather than failing the listing.
-export async function agentStateOf(host, nodeId) {
+export async function agentObservation(host, nodeId) {
   try {
-    const state = (await host.agents.get({ nodeId }))?.agentState
-    return AGENT_STATES.has(state) ? state : null
+    const { state, observedAt } = normalizeAgentState(
+      (await host.agents.get({ nodeId }))?.agentState,
+    )
+    return { agentState: state, agentStateObservedAt: observedAt }
   } catch {
-    return null
+    return { agentState: null, agentStateObservedAt: null }
   }
+}
+
+export async function agentStateOf(host, nodeId) {
+  return (await agentObservation(host, nodeId)).agentState
 }

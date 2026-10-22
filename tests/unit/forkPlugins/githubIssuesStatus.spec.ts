@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeAgentState } from '../../../plugins/github-issues/lib/status.mjs'
 import { activate } from '../../../plugins/github-issues/main.mjs'
 import { parseIssueTag } from '../../../plugins/github-issues/lib/tasks.mjs'
 import { createFakeHost, failed, type FakeNode } from './githubIssuesFakeHost'
@@ -78,6 +79,7 @@ describe('github-issues agents.status', () => {
         agentNodeId: 'agent-new',
         runtimeStatus: 'running',
         agentState: 'working',
+        agentStateObservedAt: '2026-10-22T09:49:02.000Z',
       },
       {
         issue: 'o/r#9',
@@ -89,6 +91,7 @@ describe('github-issues agents.status', () => {
         agentNodeId: 'agent-b',
         runtimeStatus: 'running',
         agentState: 'done',
+        agentStateObservedAt: '2026-10-22T09:49:02.000Z',
       },
     ])
   })
@@ -144,5 +147,21 @@ describe('github-issues agents.status', () => {
     await expect(plugin.runCommand('agents.status', { projectId: 5 }, null)).rejects.toThrow(
       /projectId/,
     )
+  })
+
+  // Regression for #31: the plugin compared the host's observation object to strings and
+  // reported null for every agent, even one parked on a permission prompt.
+  it('normalises the host observation event, mapping standby to done', () => {
+    const at = Date.UTC(2026, 9, 22, 9, 49, 2)
+    expect(
+      normalizeAgentState({ state: 'waiting', source: 'claude_hook', observedAtMs: at }),
+    ).toEqual({
+      state: 'waiting',
+      observedAt: '2026-10-22T09:49:02.000Z',
+    })
+    expect(normalizeAgentState({ state: 'standby', observedAtMs: at }).state).toBe('done')
+    expect(normalizeAgentState('working')).toEqual({ state: 'working', observedAt: null })
+    expect(normalizeAgentState({ state: 'exited' })).toEqual({ state: null, observedAt: null })
+    expect(normalizeAgentState(null)).toEqual({ state: null, observedAt: null })
   })
 })

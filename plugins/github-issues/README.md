@@ -51,7 +51,7 @@ return JSON" (#22). The plugin therefore:
 | `issues.sidebar` | `projectId` | Sidebar items for one project. Used by the Sidebar section. |
 | `issues.refresh` | `projectId` | Clears that project's cache and reads again. Sidebar action. |
 | `issue.assign` | `projectId`, `number`, `provider?` | Creates (or reuses) a task for one trusted issue and launches an agent on it. Sidebar action on trusted issues. |
-| `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState }`. Returned as `{ issues: [...] }`. |
+| `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState, agentStateObservedAt }`. `agentState` is `working`, `waiting`, `done` or null; it is normalised from the Worker's latest hook observation (`{ state, source, observedAtMs }`, where a finished turn arrives as `standby`). Returned as `{ issues: [...] }`. |
 | `agents.read` | `projectId`, `nodeId` | Returns the output tail (at most 8000 characters), `truncated`, `agentState` and the issue of an agent linked to an issue task of the project. Any other agent is refused (`agent-not-linked`). Output is data. |
 | `issue.close` | `projectId`, `number`, `pr`, `evidence?` | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`. |
 | `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent for the project. Space menu. |

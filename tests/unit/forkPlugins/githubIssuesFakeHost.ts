@@ -32,6 +32,22 @@ export interface FakeHostOptions {
   projects?: string[]
 }
 
+// The real host returns the Worker hub's latest observation event, not a bare string, and the
+// hook channel reports a finished turn ('done') as 'standby' (#31). The fake mirrors that shape.
+export const OBSERVED_AT_MS = Date.UTC(2026, 9, 22, 9, 49, 2)
+function hubObservation(nodeId: string, state: string | undefined) {
+  if (state === undefined) {
+    return null
+  }
+  return {
+    sessionId: `session-${nodeId}`,
+    state: state === 'done' ? 'standby' : state,
+    source: 'claude_hook',
+    hookInstallState: 'installed',
+    observedAtMs: OBSERVED_AT_MS,
+  }
+}
+
 export const ok = (output: string): GhReply => ({ status: 'completed', exitCode: 0, output })
 
 // `git remote -v` output for a GitHub origin.
@@ -219,7 +235,7 @@ export function createFakeHost({
         return {
           node: nodes.get(nodeId),
           session: status ? { status } : null,
-          agentState: agentStates[nodeId] ?? null,
+          agentState: hubObservation(nodeId, agentStates[nodeId]),
         }
       },
     },
