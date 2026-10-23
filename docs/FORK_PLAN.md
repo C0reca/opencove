@@ -73,10 +73,11 @@ via `info/exclude`). Aplica-se em qualquer modo e está validada ao vivo em auto
   - sem apagar o branch.
 
 **Upstream.** Os PRs genéricos do núcleo ficam preparados em branches do fork e são abertos
-pelo dono, porque implicam assinar o CLA:
-- `upstream/claude-permission-mode`: #11 + #27;
-- `upstream/link-agent-to-task`: #6;
-- o #39 vai depois de o primeiro ser aceite.
+pelo dono, porque implicam assinar o CLA. Abertos a 2026-10-23, à espera da aprovação dos
+workflows (contribuidor novo) e possivelmente do check de CLA; sem comentários nem checks:
+- DeadWaveWave/opencove#462 (`upstream/claude-permission-mode`): #11 + #27;
+- DeadWaveWave/opencove#463 (`upstream/link-agent-to-task`): #6;
+- o #39 vai depois de o #462 ser aceite.
 
 **Limites conhecidos.**
 - O guard reconhece um subconjunto de shell: não trata `eval`, heredocs nem variáveis em geral.
