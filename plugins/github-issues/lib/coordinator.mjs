@@ -9,7 +9,9 @@ import { effectiveModeFor } from './locality.mjs'
 import { findSeries } from './sequence.mjs'
 import {
   createIssueWorktree,
+  createSpaceWorktree,
   findSpaceByName,
+  isWorktreeDirectory,
   listProjectSpaces,
   selectRootSpace,
   targetWorkingDirectory,
@@ -84,11 +86,15 @@ export async function launchCoordinator({ host, projectId, configuredMode, paren
   }
 }
 
-// Decision: the dedicated Space is found by name, so a relaunch reuses it and its worktree.
+// Decision: the dedicated Space is found by name, so a relaunch reuses it and its worktree. A Space
+// whose worktree was archived gets a new one, so the coordinator never runs in the main checkout.
 async function coordinatorSpace(host, projectId, parentSpaceId) {
   const spaces = await listProjectSpaces(host, projectId)
   const existing = findSpaceByName(spaces, COORDINATOR_SPACE)
   if (existing) {
+    if (!isWorktreeDirectory(existing.directoryPath)) {
+      await createSpaceWorktree({ host, projectId, spaceId: existing.id, name: COORDINATOR_SPACE })
+    }
     return existing.id
   }
   const rootSpaceId = selectRootSpace(spaces, { explicitParentSpaceId: parentSpaceId })
