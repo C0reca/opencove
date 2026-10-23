@@ -11,8 +11,9 @@ import {
 import { mapSeries, findSeries } from './sequence.mjs'
 import { runGh } from './runGh.mjs'
 import { composeRequirement, taskTag, taskTitle } from './requirement.mjs'
-import { permissionModeFor, corePermissionMode } from './permissions.mjs'
+import { corePermissionMode, maxAgentsFor, permissionModeFor } from './permissions.mjs'
 import { effectiveModeFor } from './locality.mjs'
+import { collectAgentStatus } from './status.mjs'
 import {
   createIssueWorktree,
   issueSpaceName,
@@ -104,6 +105,26 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
     })
   }
 
+  // Counts the project's active issue agents as the coordinator skill does (working or waiting, or a
+  // running runtime status), and refuses a new launch at the limit. Nothing is written before this.
+  async function requireBelowLimit({ projectId, repo, limits }) {
+    const limit = maxAgentsFor(limits, repo)
+    const rows = await collectAgentStatus(host, [projectId])
+    const active = rows.filter(
+      row =>
+        row.agentState === 'working' ||
+        row.agentState === 'waiting' ||
+        row.runtimeStatus === 'running',
+    ).length
+    if (active >= limit) {
+      throw commandError(
+        'limit-reached',
+        `${repo} already has ${active} issue agent(s) running and the limit is ${limit} (max-agents). Nothing was launched; assign again when one finishes, or raise the limit.`,
+        { repo, active, limit },
+      )
+    }
+  }
+
   // skipTrustCheck and humanMenu are only ever true for the human menu actions. The CLI never sets them.
   async function assign({
     projectId,
@@ -177,6 +198,12 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         `The task for ${repo}#${issueNumber} is on the project canvas, not in a worktree. Remove that task, then assign the issue again.`,
         { repo, number: issueNumber, taskNodeId: existing.id },
       )
+    }
+
+    // Decision: max-agents caps new launches for the CLI only. The human Sidebar menu bypasses it:
+    // a person starting an agent on purpose overrides the throttle; the coordinator is held to it.
+    if (!humanMenu) {
+      await requireBelowLimit({ projectId: project, repo, limits: policy.maxAgents })
     }
 
     // Every issue agent runs in its own worktree Space. A relaunched task keeps its Space.

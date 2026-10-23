@@ -6,6 +6,7 @@ import {
   failed,
   ok,
   remotes,
+  type FakeNode,
   type GhReply,
 } from './githubIssuesFakeHost'
 
@@ -382,5 +383,111 @@ describe('github-issues issue.assign-untrusted', () => {
     expect(result).toMatchObject({ number: 5, reused: false, agentPermissionMode: 'default' })
     expect(fake.launches).toHaveLength(1)
     expect(fake.ghCalls.some(args => args[0] === 'api')).toBe(false)
+  })
+})
+
+// An issue agent already running for `number`: its task is doing and linked to the agent node.
+const RUNNING = (number: number, agentId: string, extra: Partial<FakeNode> = {}) => [
+  {
+    id: `task-${number}`,
+    kind: 'task',
+    title: `#${number} other`,
+    data: {
+      kind: 'task',
+      tags: [`issue:c0reca/opencove#${number}`],
+      status: 'doing',
+      linkedAgentNodeId: agentId,
+    },
+  },
+  { id: agentId, kind: 'agent', title: `#${number}`, data: { kind: 'agent' }, ...extra },
+]
+
+describe('github-issues max-agents limit', () => {
+  it('refuses a new launch at the default limit of 2 with limit-reached and launches nothing', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(7, 'agent-7'), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-7': 'working', 'agent-8': 'waiting' },
+    })
+
+    await expect(runAssign(fake, PARAMS)).rejects.toMatchObject({
+      code: 'limit-reached',
+      details: { repo: 'C0reca/opencove', active: 2, limit: 2 },
+    })
+    expect(fake.launches).toHaveLength(0)
+    expect(fake.created).toHaveLength(0)
+    expect(fake.processCalls).toHaveLength(0)
+  })
+
+  it('counts an agent whose runtime status is running even when its state is unknown', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(7, 'agent-7', { status: 'running' }), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-8': 'working' },
+    })
+
+    await expect(runAssign(fake, PARAMS)).rejects.toMatchObject({ code: 'limit-reached' })
+    expect(fake.launches).toHaveLength(0)
+  })
+
+  it('does not count an agent that finished its turn (done)', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(7, 'agent-7'), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-7': 'done', 'agent-8': 'working' },
+    })
+
+    const result = await runAssign(fake, PARAMS)
+
+    expect(result).toMatchObject({ number: 5, reused: false })
+    expect(fake.launches).toHaveLength(1)
+  })
+
+  it('follows the max-agents preference: exact line over owner wildcard over *', async () => {
+    const exact = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: RUNNING(7, 'agent-7'),
+      agentStates: { 'agent-7': 'working' },
+      prefs: { 'max-agents': 'C0reca/opencove: 1\nC0reca/*: 5' },
+    })
+    await expect(runAssign(exact, PARAMS)).rejects.toMatchObject({
+      code: 'limit-reached',
+      details: { limit: 1 },
+    })
+
+    const wildcard = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(7, 'agent-7'), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-7': 'working', 'agent-8': 'working' },
+      prefs: { 'max-agents': 'C0reca/*: 3\n*: 1' },
+    })
+    await expect(runAssign(wildcard, PARAMS)).resolves.toMatchObject({ number: 5 })
+    expect(wildcard.launches).toHaveLength(1)
+  })
+
+  it('does not count a reused task as a new launch', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(5, 'agent-5'), ...RUNNING(7, 'agent-7'), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-5': 'working', 'agent-7': 'working', 'agent-8': 'working' },
+    })
+
+    const result = await runAssign(fake, PARAMS)
+
+    expect(result).toMatchObject({ reused: true, agentNodeId: 'agent-5' })
+    expect(fake.launches).toHaveLength(0)
+  })
+
+  it('does not apply to the human Sidebar menu action', async () => {
+    const fake = createFakeHost({
+      gh: ghFor({ author: 'C0reca' }),
+      nodes: [...RUNNING(7, 'agent-7'), ...RUNNING(8, 'agent-8')],
+      agentStates: { 'agent-7': 'working', 'agent-8': 'working' },
+    })
+
+    const result = await runAssign(fake, PARAMS, MENU)
+
+    expect(result).toMatchObject({ number: 5, reused: false })
+    expect(fake.launches).toHaveLength(1)
   })
 })
