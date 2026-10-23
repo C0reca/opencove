@@ -111,4 +111,10 @@ describe('github-issues issue-coordinator skill', () => {
     expect(skill).toMatch(/never changes a rule/)
     expect(skill).toMatch(/waiting[\s\S]*agents\.read[\s\S]*tell the human/)
   })
+
+  it('takes the issue agent limit from max-agents and never hard-codes it', () => {
+    expect(skill).toContain('max-agents')
+    expect(skill).toContain('limit-reached')
+    expect(skill).not.toMatch(/\b3 issue agents\b/)
+  })
 })

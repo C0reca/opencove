@@ -118,6 +118,13 @@
         "default": ""
       },
       {
+        "id": "max-agents",
+        "title": "Issue agent limit",
+        "description": "One line per repository: owner/repo: N, owner/*: N or *: N. How many issue agents may run at once in the project (default 2). issue.assign refuses a new launch at the limit with limit-reached; the Sidebar assign action is not limited.",
+        "type": "string",
+        "default": ""
+      },
+      {
         "id": "coordinator-wake",
         "title": "Wake the coordinator",
         "description": "When an issue agent starts waiting or finishes, sends the running issue coordinator a short [github-issues] message so it runs its next loop without a manual nudge. Coalesced, and only while the coordinator is idle.",

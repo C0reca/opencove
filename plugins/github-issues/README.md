@@ -46,6 +46,17 @@ return JSON" (#22). The plugin therefore:
 - **Reports failures with detail:** the exit code and the first output lines, with token-like
   values redacted.
 
+## Connect a new project
+
+1. Open the repository in OpenCove as a project (it needs a GitHub remote; `origin` is preferred).
+2. Keep exactly one root Space (no parent, not a worktree) and draw it on the canvas.
+3. On the project's machine, `gh auth login` with an account that can read the repository.
+4. Settings → Worker → CLI → Install CLI, so `opencove` is on PATH.
+5. Set `permission-modes`, `max-agents` and, if needed, `trusted-authors`.
+6. Labels: `needs-review` is created by the first `issue.request-review`; `no-agent` is never created, so add it on GitHub only to keep an issue for yourself.
+7. Protect `main` with a ruleset: changes only by pull request, no force push, no branch deletion.
+8. Start the coordinator: Space menu → **Start issue coordinator**, or `opencove plugin run github-issues coordinator.launch --params '{"projectId":"<id>"}'` (id from `opencove project list --pretty`).
+
 ## Commands
 
 | Command | Parameters | Effect |
@@ -62,8 +73,8 @@ return JSON" (#22). The plugin therefore:
 
 `issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, configuredMode, effectiveMode, reason, agentPermissionMode, spaceId, branch, reused }`. `configuredMode` is the repository's mode, `effectiveMode` the mode that runs (see [Local projects only](#local-projects-only)), and `reason` is `null` or `remote-target` or `unknown-target`. `coordinator.launch` returns the same three fields.
 Example: `pnpm opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":5}'`.
-A CLI run refuses an issue whose author is not trusted (`untrusted-author`) and an issue labelled
-`no-agent` (`no-agent`).
+A CLI run refuses an issue whose author is not trusted (`untrusted-author`), an issue labelled
+`no-agent` (`no-agent`), and a new launch while the project is at its agent limit (`limit-reached`).
 
 Each issue has `number`, `title`, `url`, `labels`, `assignees`, `author` and
 `updatedAt`. An error has `projectIds`, `repo` (or `null`), `code` and `message`.
@@ -265,6 +276,7 @@ refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar mark
 | --- | --- | --- |
 | `trusted-authors` | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty |
 | `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
+| `max-agents` | One line per repository: `owner/repo: N`, `owner/*: N` or `*: N`. Issue agents that may run at once in the project; exact line, then owner, then `*`; non-integers are ignored. `issue.assign` refuses a new launch at the limit (`limit-reached`), reused tasks do not count, and the Sidebar assign action is not limited. | `2` |
 | `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
 | `coordinator-wake` | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator). | on |
 
@@ -382,8 +394,8 @@ Running agents are not stopped by `worktree archive`, so stop them in the UI fir
 `skills/issue-coordinator/SKILL.md` is the playbook. It:
 
 - processes issues **oldest first** (by number), and skips `needs-review` and `no-agent` issues;
-- re-reads `agents.status` immediately before each `issue.assign`, and keeps at most **3** issue agents
-  running;
+- re-reads `agents.status` immediately before each `issue.assign`, and stops assigning at the
+  project's `max-agents` limit (see [Preferences](#preferences));
 - assigns with **one call per issue**, the number written literally: no loops and no variables;
 - runs read-only gh queries with `-R owner/repo` right after the subcommand, one query per call,
   with `-q` or `--jq` and no pipes;
@@ -458,7 +470,7 @@ write has no carriage return.
 | `lib/runGh.mjs` | Resolves gh and opencove, runs them through `/usr/bin/env` with `host.operations`, and polls them |
 | `lib/service.mjs` | Ties lookups, caches and grouping together |
 | `lib/trust.mjs` | Preference parsing and the author trust decision (pure) |
-| `lib/permissions.mjs` | `permission-modes` parsing, precedence and migration; core mode mapping (pure) |
+| `lib/permissions.mjs` | `permission-modes` and `max-agents` parsing, precedence and migration; core mode mapping (pure) |
 | `lib/locality.mjs` | Local-only autonomy: the target's locality and the effective mode per launch |
 | `lib/agentSettings.mjs` | The guard written into each worktree: settings, deny and allow lists, `info/exclude` |
 | `guard/agentGuard.mjs` | The PreToolUse guard. `decide(input, worktreeRoot)` is pure |

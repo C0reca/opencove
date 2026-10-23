@@ -24,9 +24,12 @@ Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `i
 
 ## 2. Limits
 
-- At most **3 issue agents** run at the same time. Count the rows of `agents.status` whose
-  `agentState` is `working` or `waiting`, or whose `runtimeStatus` is still running. Do not assign
-  more while the count is 3 or more. If the human asks for a different number, use theirs.
+- The limit is the repository's `max-agents` preference (default 2). `issue.assign` applies it: a
+  launch at the limit fails with `limit-reached`, and nothing is launched. The error reports the
+  `active` count and the `limit`. Count the rows of `agents.status` whose `agentState` is `working`
+  or `waiting`, or whose `runtimeStatus` is still running. Do not assign more while the count is at
+  the limit. `limit-reached` is not an error to escalate: stop assigning and wait for the next loop.
+  Do not work around the limit; the human changes it in the `max-agents` preference.
 - Stop and ask the human on any `untrusted-author`, `human-only`, `task-not-in-worktree`, or
   unexpected error.
 
