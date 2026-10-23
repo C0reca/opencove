@@ -235,6 +235,12 @@ export async function createIssueWorktree({ host, projectId, rootSpaceId, name }
     )
   }
 
+  await createSpaceWorktree({ host, projectId, spaceId, name, created: 'space' })
+  return { spaceId, branch: name }
+}
+
+// Gives an existing Space a git worktree on branch `name`.
+export async function createSpaceWorktree({ host, projectId, spaceId, name, created = null }) {
   const worktree = await runOpencove(host, projectId, [
     'worktree',
     'create',
@@ -247,8 +253,7 @@ export async function createIssueWorktree({ host, projectId, rootSpaceId, name }
     throw commandError(worktree.error.code, worktree.error.message, {
       spaceId,
       branch: name,
-      created: 'space',
+      ...(created ? { created } : {}),
     })
   }
-  return { spaceId, branch: name }
 }

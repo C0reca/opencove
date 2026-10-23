@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { commandError } from './errors.mjs'
 import { cleanTerminalOutput } from './gh.mjs'
 import { runPlain } from './runGh.mjs'
+import { isWorktreeDirectory } from './worktree.mjs'
 
 // The installed guard, next to this plugin's lib/ folder. Resolved from the module's own file path.
 export const GUARD_SCRIPT = resolve(
@@ -91,7 +92,15 @@ export function buildAgentSettings({
 
 // Writes the settings file and the info/exclude entry. Throws a coded error on any failure, and the
 // caller must not launch the agent then. Paths are relative to the Space's working directory.
+// Invariant: the guard is only ever written inside an issue worktree, never the main checkout.
 export async function writeAgentGuard({ host, projectId, spaceId, root }) {
+  if (!isWorktreeDirectory(root)) {
+    throw commandError(
+      'not-a-worktree',
+      `The agent Space is not a worktree (${root}). Its worktree was archived or never created.`,
+      { spaceId },
+    )
+  }
   const target = spaceId ? { projectId, spaceId } : { projectId }
   try {
     await host.filesystem.mkdir({ target, path: '.claude' })

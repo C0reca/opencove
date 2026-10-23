@@ -32,6 +32,7 @@ export interface FakeHostOptions {
   projects?: string[]
   // Where host.target.resolve says the target runs. 'unknown' omits endpointId; 'throws' fails.
   locality?: 'local' | 'remote' | 'unknown' | 'throws'
+  workingDirectories?: Record<string, string>
 }
 
 // The endpointId of a remote Worker. Local targets report the registry id 'local'.
@@ -127,6 +128,7 @@ export function createFakeHost({
   spaces = [],
   launchError,
   locality = 'local',
+  workingDirectories = {},
 }: FakeHostOptions) {
   const reads: string[] = []
   const processCalls: Array<{ command: string; args: string[] }> = []
@@ -163,7 +165,9 @@ export function createFakeHost({
           ...(locality === 'unknown'
             ? {}
             : { endpointId: locality === 'local' ? 'local' : REMOTE_ENDPOINT_ID }),
-          workingDirectory: spaceId ? worktreeDirOf(spaceId) : PROJECT_DIR,
+          workingDirectory: spaceId
+            ? (workingDirectories[spaceId] ?? worktreeDirOf(spaceId))
+            : PROJECT_DIR,
         }
       },
     },

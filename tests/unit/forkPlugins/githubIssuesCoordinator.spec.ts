@@ -47,6 +47,7 @@ async function runCoordinator(
     sessions?: Record<string, string>
     prefs?: Record<string, string>
     spaces?: Array<Record<string, unknown>>
+    workingDirectories?: Record<string, string>
   } = {},
 ) {
   const fake = createFakeHost({ gh: cliFor(options.spaces), ...options })
@@ -122,6 +123,30 @@ describe('github-issues coordinator.launch', () => {
 
     expect(fake.processCalls.map(call => call.args.slice(0, 2).join(' '))).toEqual(['space list'])
     expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-coord' })
+  })
+
+  it('gives a reused coordinator Space whose worktree was archived a new worktree', async () => {
+    const archived = { ...COORD_SPACE, directoryPath: '/Users/me/repo' }
+    const { fake, run } = await runCoordinator({ spaces: [archived] })
+
+    await run({ projectId: 'p1' })
+
+    expect(fake.processCalls.map(call => call.args.join(' '))).toEqual([
+      'space list --project p1',
+      'worktree create --space space-coord --name issue-coordinator',
+    ])
+    expect(fake.launches[0].target).toEqual({ projectId: 'p1', spaceId: 'space-coord' })
+  })
+
+  it('never writes the guard or launches when the Space resolves to the main checkout', async () => {
+    const { fake, run } = await runCoordinator({
+      spaces: [COORD_SPACE],
+      workingDirectories: { 'space-coord': '/Users/me/repo' },
+    })
+
+    await expect(run({ projectId: 'p1' })).rejects.toMatchObject({ code: 'not-a-worktree' })
+    expect(fake.files.size).toBe(0)
+    expect(fake.launches).toHaveLength(0)
   })
 
   it('writes the guard file into the coordinator worktree before it launches', async () => {
