@@ -5,10 +5,12 @@ import { createFakeHost, failed, type FakeNode } from './githubIssuesFakeHost'
 const COORD = 'coord'
 const WAITING_43 =
   '[github-issues] #43 agent is now waiting. Read it with agents.read and tell the human what it asks.'
-const DONE_43 = '[github-issues] #43 agent is done. Run your next loop.'
-const DONE_44 = '[github-issues] #44 agent is done. Run your next loop.'
+const DONE_43 =
+  '[github-issues] #43 agent is done. Run your next loop, starting with a fresh issues.list (refresh: true).'
+const DONE_44 =
+  '[github-issues] #44 agent is done. Run your next loop, starting with a fresh issues.list (refresh: true).'
 const MIXED =
-  '[github-issues] #43 agent is now waiting; #44 agent is done. Read it with agents.read and tell the human what it asks. Run your next loop.'
+  '[github-issues] #43 agent is now waiting; #44 agent is done. Read it with agents.read and tell the human what it asks. Run your next loop, starting with a fresh issues.list (refresh: true).'
 
 type Observation = string | { state: string; at: number }
 

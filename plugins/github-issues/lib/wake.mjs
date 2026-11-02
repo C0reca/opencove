@@ -36,7 +36,7 @@ export function wakeMessage(entries) {
     )
   }
   if (done > 0) {
-    tails.push('Run your next loop.')
+    tails.push('Run your next loop, starting with a fresh issues.list (refresh: true).')
   }
   return `${WAKE_PREFIX} ${clauses.join('; ')}. ${tails.join(' ')}`
 }

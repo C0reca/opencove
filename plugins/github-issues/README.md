@@ -425,8 +425,8 @@ state, and only a readable "no running coordinator" resets it.
 treats as a wake trigger:
 
 - `[github-issues] #43 agent is now waiting. Read it with agents.read and tell the human what it asks.`
-- `[github-issues] #43 agent is done. Run your next loop.`
-- Several transitions: `[github-issues] #43 agent is now waiting; #44 agent is done. Read it with agents.read and tell the human what it asks. Run your next loop.`
+- `[github-issues] #43 agent is done. Run your next loop, starting with a fresh issues.list (refresh: true).`
+- Several transitions: `[github-issues] #43 agent is now waiting; #44 agent is done. Read it with agents.read and tell the human what it asks. Run your next loop, starting with a fresh issues.list (refresh: true).`
 
 **Paste protection workaround.** A long prompt plus `\r` in one write is treated by Claude Code as a
 paste: it shows "Removed 1 invisible character · review and press Enter" and does not submit. So the
