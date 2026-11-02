@@ -44,6 +44,7 @@ opencove node delete --node <id> [--pretty]
 opencove canvas focus node --node <id> [--pretty]
 opencove canvas focus space [space locator] [--pretty]
 opencove space create --parent <spaceId> [--name <text>] [--project <id>] [--pretty]
+opencove space archive --space <id> [--project <id>] [--pretty]
 ```
 
 `--focus` 是 create 的 CLI 编排：
@@ -61,7 +62,17 @@ Focus 失败不会回滚已创建的 node。
 - The parent must have a canvas position (`rect`). A parent that has none fails with `parent_missing_rect`. The CLI prints a message asking you to place the space on the canvas, then exits 1. The JSON result is still printed to stdout.
 - The child inherits the parent's `directoryPath`. It does not create a directory, and it does not move nodes.
 - A child Space does not get a worktree by itself. Bind one with `opencove worktree create --space <childSpaceId>` (this requires the child's parent to be a root-bound Space).
-- There is no CLI command yet to remove or archive a Space. `worktree archive` resets a Space's directory but keeps the Space.
+- `worktree archive` resets a Space's directory but keeps the Space. To remove the Space, use `space archive`.
+
+## Space Archive
+
+`opencove space archive` wraps the `space.archive` control command. It does what the canvas "Archive Space" action does, without touching git:
+
+- The Space and every Space inside it leave the canvas, with their nodes. One record is added to the project's Space archive (the same record the canvas writes, built by `src/shared/utils/spaceArchiveRecord.ts`; the newest 50 are kept).
+- Nodes with a live runtime (a terminal or agent session, a website or plugin window) are closed first through `node.delete`, as the canvas closes them before archiving.
+- A root Space (no parent) is refused with `root_space`.
+- A Space whose subtree has its own git worktree is refused with `space_has_worktree`. Run `opencove worktree archive --space <id>` for it first; that removes the worktree and returns the Space to the project root.
+- Errors print the JSON result to stdout, a hint to stderr, and exit 1. The result on success is `{ projectId, spaceId, archivedSpaceIds, archivedNodeIds, closedNodeIds, recordId }`.
 
 ## Space Locator
 

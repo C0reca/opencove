@@ -160,6 +160,20 @@ export interface CreateChildSpaceInput {
   anchor?: { x: number; y: number } | null
 }
 
+export interface ArchiveSpaceInput {
+  projectId?: string | null
+  spaceId: string
+}
+
+export interface ArchiveSpaceResult {
+  projectId: string
+  spaceId: string
+  archivedSpaceIds: string[]
+  archivedNodeIds: string[]
+  closedNodeIds: string[]
+  recordId: string
+}
+
 export interface CreateChildSpaceResult {
   projectId: string
   activeSpaceId: string | null

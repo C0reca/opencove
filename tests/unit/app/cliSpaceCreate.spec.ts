@@ -117,3 +117,29 @@ describe('CLI space create', () => {
     expect(requests).toHaveLength(0)
   })
 })
+
+describe('CLI space archive', () => {
+  it('wraps space.archive with the space and project', async () => {
+    const requests = stubInvoke({ ok: true, value: { spaceId: 's1' } })
+
+    await expect(run(['space', 'archive', '--space', 's1', '--project', 'p1'])).resolves.toBe(true)
+
+    expect(requests).toEqual([
+      { kind: 'command', id: 'space.archive', payload: { spaceId: 's1', projectId: 'p1' } },
+    ])
+  })
+
+  it('explains a Space with its own worktree and exits 1', async () => {
+    stubInvoke({
+      ok: false,
+      error: {
+        code: 'common.invalid_input',
+        debugMessage: 'space.archive failed: space_has_worktree',
+      },
+    })
+    const { stderr } = stubExitAndStderr()
+
+    await expect(run(['space', 'archive', '--space', 's1'])).rejects.toThrow('exit 1')
+    expect(stderr()).toContain('opencove worktree archive --space <id>')
+  })
+})
