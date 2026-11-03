@@ -5,6 +5,7 @@ import { commandError } from './lib/errors.mjs'
 import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
 import { createWakeService } from './lib/wake.mjs'
+import { createNotifier } from './lib/notify.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { permissionModeFor } from './lib/permissions.mjs'
@@ -18,7 +19,13 @@ export async function activate(context) {
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
   const closing = createClosingService({ host, repoOf: service.repoForProject })
   // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
-  const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
+  const notifier = createNotifier({ host, log: context.log })
+  const wake = createWakeService({
+    host,
+    projectIds: () => allProjectIds(),
+    log: context.log,
+    notifier,
+  })
   wake.start()
 
   return {
@@ -73,13 +80,23 @@ export async function activate(context) {
             pr: params.pr,
             evidence: params.evidence,
           })
-        case 'issue.request-review':
-          return closing.requestReview({
+        case 'issue.request-review': {
+          const review = await closing.requestReview({
             projectId,
             number: params.number,
             summary: params.summary,
             evidence: params.evidence,
           })
+          // A retried call within 10 min is the same event; a later request is a new one.
+          await notifier.notify({
+            key: `review|${review.repo}#${review.number}`,
+            event: 'review',
+            repo: review.repo,
+            number: review.number,
+            windowMs: 10 * 60_000,
+          })
+          return review
+        }
         case 'issue.close-manual':
           // Human-only: same guard as issue.assign-untrusted.
           if (!commandContext?.host) {

@@ -267,6 +267,10 @@ refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar mark
 | `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
 | `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
 | `coordinator-wake` | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator). | on |
+| `notify-channel` | `off` or `ntfy`. Phone notices; see [Phone notices](#phone-notices). | off |
+| `ntfy-topic` | The ntfy topic. Without one nothing is sent. | empty |
+| `ntfy-server` | The ntfy server URL (http or https). | `https://ntfy.sh` |
+| `notify-waiting-minutes` | Notice an issue agent that has waited for the human longer than this. | 10 |
 
 ### Human-only action
 
@@ -446,6 +450,11 @@ write has no carriage return.
   during the reload are not replayed.
 - Polling `agents.status` every 10 s costs a few host calls per project with a coordinator.
 
+### Phone notices
+
+With `notify-channel: ntfy` and a topic, the backend sends a notice when a PR enters review, an
+issue agent waits too long, or the coordinator stops mid-work. Rules and limits: [NOTICES.md](NOTICES.md).
+
 ## Files
 
 | File | Purpose |
@@ -473,6 +482,7 @@ write has no carriage return.
 | `lib/coordinator.mjs` | `coordinator.launch`: prompt, the coordinator Space, reuse rule |
 | `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
 | `lib/wake.mjs` | Coordinator wake-up: transition detection, coalescing, idle gating, two-write submission |
+| `lib/notify.mjs` | Phone notices: ntfy adapter, notice text, dedupe |
 | `lib/worktree.mjs` | Worktree per issue: name sanitising, Space listing, CLI calls, error classes |
 | `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
 

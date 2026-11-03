@@ -7,6 +7,7 @@
 // agents.status only for projects with a running coordinator, and it stops in dispose().
 import { findRunningCoordinator } from './coordinator.mjs'
 import { mapSeries } from './sequence.mjs'
+import { waitingMinutesOf } from './notify.mjs'
 import { collectAgentStatus } from './status.mjs'
 
 export const WAKE_PREFIX = '[github-issues]'
@@ -68,6 +69,8 @@ export function createWakeService({
   settleMs = SETTLE_MS,
   submitDelayMs = SUBMIT_DELAY_MS,
   holdMs = HOLD_MS,
+  // Phone notices (#59): agents waiting too long, and a coordinator that stops mid-work.
+  notifier = null,
 }) {
   const projects = new Map()
   let timer = null
@@ -110,6 +113,7 @@ export function createWakeService({
   async function runPass() {
     const preferences = (await host.preferences.get()) ?? {}
     const enabled = preferences[WAKE_PREFERENCE] !== false
+    const waitingMs = waitingMinutesOf(preferences) * 60_000
     await mapSeries(await projectIds(), async projectId => {
       if (disposed) {
         return
@@ -118,11 +122,11 @@ export function createWakeService({
         projects.delete(projectId)
         return
       }
-      await checkProject(projectId)
+      await checkProject(projectId, waitingMs)
     })
   }
 
-  async function checkProject(projectId) {
+  async function checkProject(projectId, waitingMs) {
     let coordinator
     try {
       coordinator = await findRunningCoordinator(host, projectId)
@@ -132,7 +136,9 @@ export function createWakeService({
       return
     }
     if (!coordinator) {
-      projects.delete(projectId)
+      if (projects.delete(projectId)) {
+        await noticeStoppedCoordinator(projectId)
+      }
       return
     }
 
@@ -140,6 +146,7 @@ export function createWakeService({
     projects.set(projectId, entry)
     const rows = await collectAgentStatus(host, [projectId])
     observe(entry, rows)
+    await noticeLongWaits(rows, waitingMs)
     if (!entry.seeded) {
       // The first look is a silent baseline: states that existed before are not replayed.
       entry.seeded = true
@@ -173,6 +180,41 @@ export function createWakeService({
       })
       entry.lastChangeAt = now()
     }
+  }
+
+  // One notice per waiting observation that has lasted longer than the preference allows.
+  async function noticeLongWaits(rows, waitingMs) {
+    const long = rows.filter(row => {
+      const since = Date.parse(row.agentStateObservedAt ?? '')
+      return row.agentState === 'waiting' && Number.isFinite(since) && now() - since >= waitingMs
+    })
+    await mapSeries(long, row =>
+      notifier?.notify({
+        key: `waiting|${row.issue}|${row.agentStateObservedAt}`,
+        event: 'waiting',
+        repo: row.repo,
+        number: row.number,
+        minutes: Math.round(waitingMs / 60_000),
+      }),
+    )
+  }
+
+  // A coordinator seen running is gone. Only worth a notice while issue tasks are still in doing.
+  async function noticeStoppedCoordinator(projectId) {
+    if (!notifier) {
+      return
+    }
+    const inProgress = (await collectAgentStatus(host, [projectId])).filter(
+      row => row.taskStatus === 'doing',
+    )
+    if (inProgress.length === 0) {
+      return
+    }
+    await notifier.notify({
+      key: `coordinator|${projectId}|${now()}`,
+      event: 'coordinator',
+      repo: inProgress[0].repo,
+    })
   }
 
   async function flush(entry, coordinator) {

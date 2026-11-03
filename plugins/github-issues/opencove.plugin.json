@@ -123,6 +123,36 @@
         "description": "When an issue agent starts waiting or finishes, sends the running issue coordinator a short [github-issues] message so it runs its next loop without a manual nudge. Coalesced, and only while the coordinator is idle.",
         "type": "boolean",
         "default": true
+      },
+      {
+        "id": "notify-channel",
+        "title": "Phone notices",
+        "description": "Where to send notices when a pull request enters review, an issue agent waits too long, or the coordinator stops with issues in progress. Notices carry only owner/repo, the number and the event type.",
+        "type": "string",
+        "default": "off",
+        "enum": ["off", "ntfy"]
+      },
+      {
+        "id": "ntfy-topic",
+        "title": "ntfy topic",
+        "description": "The ntfy topic to publish to. Without a topic nothing is sent. Topics on ntfy.sh are public, so pick a long, unguessable name.",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "id": "ntfy-server",
+        "title": "ntfy server",
+        "description": "The ntfy server URL.",
+        "type": "string",
+        "default": "https://ntfy.sh"
+      },
+      {
+        "id": "notify-waiting-minutes",
+        "title": "Notify after waiting (minutes)",
+        "description": "Send a notice when an issue agent has been waiting for the human longer than this. Checked by the coordinator wake-up, so it needs a running coordinator and coordinator-wake on.",
+        "type": "number",
+        "default": 10,
+        "minimum": 1
       }
     ]
   }
