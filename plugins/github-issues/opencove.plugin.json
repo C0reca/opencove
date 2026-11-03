@@ -82,8 +82,24 @@
       {
         "id": "issue.request-review",
         "title": "Request human review",
-        "description": "Adds the needs-review label (created if missing) and comments the summary and evidence. Never closes the issue.",
+        "description": "Adds the needs-review label (created if missing) and comments the summary and evidence. Never closes the issue. Refused with review-required while an open PR for the issue has no reviewer approval of its head commit and fewer than 2 reviewer rounds.",
         "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"summary\":\"...\",\"evidence\":\"...\"}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "reviewer.launch",
+        "title": "Launch reviewer agent",
+        "description": "Starts the reviewer agent for an open PR that declares Fixes #number: a review-<N>-<sha> Space with a detached worktree at the PR head, where the agent cannot edit, commit or push. Idempotent per head commit; refuses a commit already reviewed and a PR whose 2 reviewer rounds are spent.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"pr\":12}'",
+        "target": "plugin",
+        "menus": []
+      },
+      {
+        "id": "reviewer.submit",
+        "title": "Submit reviewer verdict",
+        "description": "The reviewer agent's verdict (approve or changes), recorded as a marker comment on the PR. approve sends the issue to needs-review; changes hands the work back to the engineer agent, or after 2 rounds sends it to needs-review with a note. Only the reviewer agent may run it.",
+        "usage": "--params '{\"projectId\":\"<id>\",\"number\":5,\"pr\":12,\"verdict\":\"approve\",\"body\":\"...\"}'",
         "target": "plugin",
         "menus": []
       },

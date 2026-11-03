@@ -30,6 +30,16 @@ const DENY = Object.freeze([
   // A leading slash anchors the pattern to the worktree root instead of any depth.
   'Edit(/.claude/**)',
 ])
+// Only the reviewer agent records a verdict (#57).
+const DENY_SUBMIT = 'Bash(opencove plugin run github-issues reviewer.submit:*)'
+// The reviewer reads and runs tests; it never writes files or the branch.
+const REVIEWER_DENY = Object.freeze([
+  'Edit',
+  'Write',
+  'NotebookEdit',
+  'Bash(git commit:*)',
+  'Bash(git push:*)',
+])
 // ponytail: `git push origin -f` (force after the remote) is caught only by the guard hook, because
 // prefix rules match the command text as written. Layer a is a cheap first line, not the boundary.
 
@@ -54,6 +64,7 @@ const ALLOW_PLUGIN_COMMANDS = [
   'issue.assign',
   'issue.request-review',
   'issue.close',
+  'reviewer.launch',
 ].map(id => `opencove plugin run github-issues ${id}:*`)
 
 export const ALLOW = Object.freeze([
@@ -63,14 +74,25 @@ export const ALLOW = Object.freeze([
   'Bash(opencove project list:*)',
 ])
 
-// The settings object for one worktree. `root` is its absolute path, passed to the guard as argv[2].
+const REVIEWER_ALLOW = Object.freeze([
+  ...[...ALLOW_GH, 'gh pr diff -R:*', 'gh pr diff --repo:*'].map(rule => `Bash(${rule})`),
+  'Bash(opencove plugin run github-issues reviewer.submit:*)',
+  'Bash(opencove plugin skill github-issues:*)',
+])
+
+// The settings object for one worktree. `root` is its absolute path, passed to the guard as argv[2];
+// `role` ('engineer' or 'reviewer') is argv[3].
 export function buildAgentSettings({
   root,
+  role = 'engineer',
   execPath = process.execPath,
   guardPath = GUARD_SCRIPT,
 }) {
+  const reviewer = role === 'reviewer'
   return {
-    permissions: { deny: [...DENY], allow: [...ALLOW] },
+    permissions: reviewer
+      ? { deny: [...DENY, ...REVIEWER_DENY], allow: [...REVIEWER_ALLOW] }
+      : { deny: [...DENY, DENY_SUBMIT], allow: [...ALLOW] },
     hooks: {
       PreToolUse: [
         {
@@ -81,7 +103,7 @@ export function buildAgentSettings({
               // Exec form: /usr/bin/env sets ELECTRON_RUN_AS_NODE for Electron, then runs the guard
               // with the worktree root as its one argument. Same runtime rule as the hook relay.
               command: '/usr/bin/env',
-              args: [ENV_PREFIX, execPath, guardPath, root],
+              args: [ENV_PREFIX, execPath, guardPath, root, ...(reviewer ? [role] : [])],
             },
           ],
         },
@@ -93,7 +115,7 @@ export function buildAgentSettings({
 // Writes the settings file and the info/exclude entry. Throws a coded error on any failure, and the
 // caller must not launch the agent then. Paths are relative to the Space's working directory.
 // Invariant: the guard is only ever written inside an issue worktree, never the main checkout.
-export async function writeAgentGuard({ host, projectId, spaceId, root }) {
+export async function writeAgentGuard({ host, projectId, spaceId, root, role = 'engineer' }) {
   if (!isWorktreeDirectory(root)) {
     throw commandError(
       'not-a-worktree',
@@ -116,7 +138,7 @@ export async function writeAgentGuard({ host, projectId, spaceId, root }) {
   await host.filesystem.writeText({
     target,
     path: SETTINGS_PATH,
-    content: `${JSON.stringify(buildAgentSettings({ root }), null, 2)}\n`,
+    content: `${JSON.stringify(buildAgentSettings({ root, role }), null, 2)}\n`,
     overwrite: true,
   })
   await excludeFromGit(host, target)

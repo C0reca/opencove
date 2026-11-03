@@ -87,6 +87,12 @@ function ghViolation(words) {
     }
   }
   const [first, second] = positional
+  // Reviewer verdicts are marker comments the plugin writes (#57); agents must not forge one.
+  // ponytail: a marker inside --body-file content is not seen. Agents comment as the human's gh
+  // account, so the plugin's author check stops other accounts only; a hidden forger needs this.
+  if (words.some(word => word.includes('opencove:reviewer'))) {
+    return 'writing an opencove:reviewer marker is blocked; only reviewer.submit records a verdict.'
+  }
   if (first === 'api') {
     return 'gh api is blocked for plugin agents; use the plugin commands or read-only gh pr/issue list and view.'
   }
@@ -132,7 +138,7 @@ function pushViolation(rest) {
 }
 
 // Walks git's global options (-C dir, -c k=v, --git-dir x) to find the subcommand and directory.
-function gitViolation(words, cwd, root) {
+function gitViolation(words, cwd, root, role) {
   let dir = cwd
   let i = 1
   while (i < words.length && words[i].startsWith('-')) {
@@ -147,6 +153,9 @@ function gitViolation(words, cwd, root) {
   }
   const sub = words[i]
   const rest = words.slice(i + 1)
+  if (role === 'reviewer' && (sub === 'commit' || sub === 'push')) {
+    return `git ${sub} is blocked for the reviewer agent; it reviews, it never writes to the branch.`
+  }
   if (sub === 'reset' && rest.includes('--hard')) {
     if (dir === null) {
       return 'git reset --hard in a directory that cannot be verified is blocked.'
@@ -223,7 +232,12 @@ function claudeWriteViolation(program, words, redirects, cwd, root) {
   return null
 }
 
-function segmentViolation(segment, cwd, root, depth) {
+// `opencove plugin run github-issues reviewer.submit ...`, wherever the flags sit.
+function isReviewSubmit(words) {
+  return words.includes('plugin') && words.includes('run') && words.includes('reviewer.submit')
+}
+
+function segmentViolation(segment, cwd, root, depth, role) {
   const { words, assignments } = unwrap(segment.words)
   const program = words.length > 0 ? posix.basename(words[0]) : ''
   const redirectReason = claudeWriteViolation(program, words, segment.redirects, cwd, root)
@@ -237,26 +251,29 @@ function segmentViolation(segment, cwd, root, depth) {
     if (assignments.some(item => /^GIT_(DIR|WORK_TREE)=/.test(item))) {
       return 'setting GIT_DIR or GIT_WORK_TREE is blocked for plugin agents.'
     }
-    return gitViolation(words, cwd, root)
+    return gitViolation(words, cwd, root, role)
   }
   if (program === 'rm') {
     return rmViolation(words, cwd, root)
   }
   if (SHELLS.has(program) && words.includes('-c')) {
     const body = words[words.indexOf('-c') + 1]
-    return body === undefined ? null : findViolation(body, cwd, root, depth + 1)
+    return body === undefined ? null : findViolation(body, cwd, root, depth + 1, role)
+  }
+  if (program === 'opencove' && role !== 'reviewer' && isReviewSubmit(words)) {
+    return 'reviewer.submit is only for the reviewer agent.'
   }
   return null
 }
 
 // Returns the first reason to deny, or null. `cd` inside the command moves the working directory.
-function findViolation(command, cwd, root, depth) {
+function findViolation(command, cwd, root, depth, role) {
   if (depth > MAX_DEPTH) {
     return 'the command nests too deeply to check.'
   }
   const { segments, substitutions } = tokenize(command)
   for (const body of substitutions) {
-    const reason = findViolation(body, cwd, root, depth + 1)
+    const reason = findViolation(body, cwd, root, depth + 1, role)
     if (reason) {
       return reason
     }
@@ -271,7 +288,7 @@ function findViolation(command, cwd, root, depth) {
       }
       continue
     }
-    const reason = segmentViolation(segment, dir, root, depth)
+    const reason = segmentViolation(segment, dir, root, depth, role)
     if (reason) {
       return reason
     }
@@ -281,7 +298,7 @@ function findViolation(command, cwd, root, depth) {
 
 // input: the PreToolUse JSON. worktreeRoot: absolute path of the agent's worktree.
 // Returns the hook output to print, or null to leave the decision to the normal permission flow.
-export function decide(input, worktreeRoot) {
+export function decide(input, worktreeRoot, role = 'engineer') {
   const command = input?.tool_input?.command
   if (
     input?.tool_name !== 'Bash' ||
@@ -293,7 +310,7 @@ export function decide(input, worktreeRoot) {
   const root = posix.resolve(worktreeRoot)
   const start =
     typeof input.cwd === 'string' && posix.isAbsolute(input.cwd) ? posix.resolve(input.cwd) : root
-  const reason = findViolation(command, start, root, 0)
+  const reason = findViolation(command, start, root, 0, role)
   return reason ? deny(reason) : null
 }
 
@@ -326,7 +343,7 @@ async function main() {
     process.stderr.write('OpenCove agent guard: no worktree root, allowing the call.\n')
     return
   }
-  const output = decide(input, root)
+  const output = decide(input, root, process.argv[3])
   if (output) {
     process.stdout.write(`${JSON.stringify(output)}\n`)
   }
