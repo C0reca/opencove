@@ -1,6 +1,7 @@
 // Pure author-trust rules for issue.assign: preference parsing and the decision table.
 // Fail closed: anything missing or unparsable leaves the author untrusted.
 // The gh permission lookup itself lives in assign.mjs; permissionDecision only reads its answer.
+import { parseMaxAgents } from './limits.mjs'
 import { parsePermissionModes } from './permissions.mjs'
 
 export const MAINTAINER_LOGIN = 'c0reca'
@@ -64,6 +65,7 @@ export function readTrustPolicy(preferences) {
       preferences?.['permission-modes'],
       preferences?.['auto-approve-repos'],
     ),
+    maxAgents: parseMaxAgents(preferences?.['max-agents']),
   }
 }
 

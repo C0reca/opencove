@@ -13,6 +13,8 @@ import { runGh } from './runGh.mjs'
 import { composeRequirement, taskTag, taskTitle } from './requirement.mjs'
 import { permissionModeFor, corePermissionMode } from './permissions.mjs'
 import { effectiveModeFor } from './locality.mjs'
+import { isActiveAgentRow, maxAgentsFor } from './limits.mjs'
+import { collectAgentStatus } from './status.mjs'
 import {
   createIssueWorktree,
   issueSpaceName,
@@ -29,6 +31,9 @@ export const DEFAULT_PROVIDER = 'claude-code'
 export function createAssignService({ host, repoOf, ttlMs, now }) {
   // Caches only real permission answers; a failed lookup is retried, which keeps trust fail-closed.
   const permissionCache = createTtlCache({ ttlMs, now })
+  // Assigns run one after another, so two quick calls cannot both pass the agent limit.
+  // ponytail: in-process only; two plugin backends on one project could still overshoot by one.
+  let assignChain = Promise.resolve()
 
   async function lookupPermission(projectId, repo, login) {
     if (!/^[a-z0-9-]+$/.test(login)) {
@@ -104,8 +109,28 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
     })
   }
 
+  function assign(options) {
+    const run = assignChain.then(() => assignNow(options))
+    assignChain = run.catch(() => undefined)
+    return run
+  }
+
+  // Decision: the limit binds agent-driven assigns (CLI). A person's menu action may go over it.
+  async function requireAgentSlot(projectId, repo, issueNumber, policy) {
+    const max = maxAgentsFor(policy.maxAgents, repo)
+    const rows = await collectAgentStatus(host, [projectId])
+    const active = rows.filter(isActiveAgentRow).length
+    if (active >= max) {
+      throw commandError(
+        'limit-reached',
+        `${repo} already has ${active} active issue agent(s) and the limit is ${max} (max-agents). Wait for one to finish before assigning #${issueNumber}.`,
+        { repo, number: issueNumber, active, max },
+      )
+    }
+  }
+
   // skipTrustCheck and humanMenu are only ever true for the human menu actions. The CLI never sets them.
-  async function assign({
+  async function assignNow({
     projectId,
     number,
     provider,
@@ -177,6 +202,10 @@ export function createAssignService({ host, repoOf, ttlMs, now }) {
         `The task for ${repo}#${issueNumber} is on the project canvas, not in a worktree. Remove that task, then assign the issue again.`,
         { repo, number: issueNumber, taskNodeId: existing.id },
       )
+    }
+
+    if (!humanMenu) {
+      await requireAgentSlot(project, repo, issueNumber, policy)
     }
 
     // Every issue agent runs in its own worktree Space. A relaunched task keeps its Space.
