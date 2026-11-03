@@ -11,7 +11,21 @@ and report.
 
 Every plugin command is `opencove plugin run github-issues <command> --params '<json>'`.
 Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `issue.assign`,
-`issue.request-review`, `issue.close`. Read each result and check its fields before the next step.
+`reviewer.launch`, `issue.request-review`, `issue.close`. Read each result and check its fields
+before the next step.
+
+## Roles
+
+Each issue goes through agents with fixed roles. You launch them; you never do their work.
+
+| Role | Launched by | Worktree | Can write | Reports with |
+|------|-------------|----------|-----------|--------------|
+| engineer | `issue.assign` | `issue-<N>-...`, its own branch | files, commits, pushes to its branch | a PR that declares `Fixes #N` |
+| reviewer | `reviewer.launch` | `review-<N>-<sha>`, detached at the PR head | nothing (edit, commit and push are blocked) | `reviewer.submit` (the agent runs it, never you) |
+
+The reviewer's verdict acts by itself: `approve` sends the issue to `needs-review`; `changes` hands
+the work back to the engineer in the same worktree; after 2 rounds of `changes` the issue goes to
+`needs-review` with a note. You never run `reviewer.submit`.
 
 ## 1. Runtime and project
 
@@ -97,15 +111,24 @@ Then decide:
 - **PR is `MERGED` and declares `Fixes #N`:** run
   `opencove plugin run github-issues issue.close --params '{"projectId":"<id>","number":<N>,"pr":<pr>,"evidence":"<one line: what was checked>"}'`.
   Read back `closed: true`.
-- **PR is open, or there is no PR:** the work is not finished for a human to judge. Do not close.
-  Run `opencove plugin run github-issues issue.request-review --params '{"projectId":"<id>","number":<N>,"summary":"<what the agent did>","evidence":"<PR link or the reason there is none>"}'`
-  and tell the human the PR is ready for review. Then stop working on that issue. Do not request
-  review again on later loops.
+- **PR is open:** the reviewer agent checks it before any human does. Run
+  `opencove plugin run github-issues reviewer.launch --params '{"projectId":"<id>","number":<N>,"pr":<pr>}'`.
+  `reused: true` means a reviewer is already on this commit: leave it. Its verdict moves the issue
+  on by itself, so do nothing more for that issue in this loop. If it fails with `already-reviewed`,
+  the engineer has not pushed since the last verdict: read the engineer with `agents.read` and tell
+  the human. If it fails with `rounds-exhausted`, run `issue.request-review` (below) with a summary
+  that says the reviewer rounds are spent.
+- **There is no PR:** the work is not finished for a human to judge. Do not close.
+  Run `opencove plugin run github-issues issue.request-review --params '{"projectId":"<id>","number":<N>,"summary":"<what the agent did>","evidence":"<the reason there is no PR>"}'`
+  and tell the human. Then stop working on that issue. Do not request review again on later loops.
+  `issue.request-review` is refused with `review-required` while an open PR has no reviewer
+  approval; then use `reviewer.launch` instead.
 - **PR is `MERGED` but does not declare `Fixes #N`** (`pr-not-linked`): the merged PR does not prove
   this issue is resolved. Do not edit the PR and do not retry `issue.close`. Run
   `opencove plugin run github-issues issue.request-review --params '{"projectId":"<id>","number":<N>,"summary":"PR <url> is merged but does not declare Fixes #<N>, so it does not prove this issue is resolved.","evidence":"<PR link>"}'`.
   Then stop for that issue.
-- `pr-not-found` or `pr-not-merged`: treat it as not merged and use `issue.request-review`.
+- `pr-not-found`: treat it as no PR and use `issue.request-review`.
+- `pr-not-merged`: the PR is still open; use `reviewer.launch`.
 
 **Merging is always the human's.** You never merge a pull request, and you never ask an agent to.
 When a pull request is ready, `issue.request-review` plus a message to the human is the whole job.

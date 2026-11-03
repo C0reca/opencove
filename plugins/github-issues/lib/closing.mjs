@@ -15,7 +15,7 @@ import { runGh, runGhOrThrow } from './runGh.mjs'
 import { listTaskNodes, setTaskStatus } from './tasks.mjs'
 import { taskTag } from './requirement.mjs'
 
-export function createClosingService({ host, repoOf }) {
+export function createClosingService({ host, repoOf, reviewGate = null }) {
   async function viewPull(projectId, repo, pr) {
     const result = await runGh(host, { projectId }, prViewArgs(pr), { repo })
     if (!result.ok) {
@@ -97,13 +97,17 @@ export function createClosingService({ host, repoOf }) {
   }
 
   // Adds needs-review and a comment; never closes. The label is created idempotently.
-  async function requestReview({ projectId, number, summary, evidence }) {
+  // `reviewed` is set only by the reviewer's own verdict (reviewer.submit), never from the CLI.
+  async function requestReview({ projectId, number, summary, evidence, reviewed = false }) {
     const project = requireProjectId(projectId)
     const issueNumber = requirePositiveInt(number, 'number')
     const text = requireText(summary, 'summary')
     const proof = requireText(evidence, 'evidence')
     const repo = await repoOf(project)
     const target = { projectId: project }
+    if (reviewGate && !reviewed) {
+      await reviewGate({ projectId: project, repo, number: issueNumber })
+    }
 
     await runGhOrThrow(
       host,

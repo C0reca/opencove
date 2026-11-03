@@ -220,6 +220,9 @@ A plugin window lists agent pull requests ready for a decision, with Merge (squa
 changes and Close without merge. Only the window can run these actions; no agent can. See
 [REVIEW_QUEUE.md](./REVIEW_QUEUE.md).
 
+A reviewer agent checks each PR before it reaches the queue (`reviewer.launch`, `reviewer.submit`):
+read-only, at most 2 rounds, verdicts recorded on the PR. See [REVIEWER.md](./REVIEWER.md).
+
 ## Assigning issues to agents
 
 `issue.assign` turns one issue into a canvas task and starts an agent on it:
@@ -476,6 +479,7 @@ write has no carriage return.
 | `lib/tasks.mjs`                     | Task lookups by issue tag and status writes                                                       |
 | `lib/review.mjs`                    | Review queue: PR list, merge, request changes, close without merge                                |
 | `view/`                             | Review queue window (HTML, CSS, JS); see `REVIEW_QUEUE.md`                                        |
+| `lib/reviewer.mjs`                  | Reviewer agent: reviewer.launch, reviewer.submit and the request-review gate; see `REVIEWER.md`       |
 | `lib/status.mjs`                    | `agents.status` shaping and the agent-to-task fallback                                            |
 | `lib/closing.mjs`                   | `issue.close`, `issue.request-review`, `issue.close-manual`                                       |
 | `lib/coordinator.mjs`               | `coordinator.launch`: prompt, the coordinator Space, reuse rule                                   |

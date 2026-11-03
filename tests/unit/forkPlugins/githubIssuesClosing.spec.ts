@@ -11,6 +11,10 @@ function ghFor(pull: Record<string, unknown> | 'missing') {
     if (line === 'remote -v') {
       return ok(remotes('C0reca/opencove'))
     }
+    if (line.startsWith('pr list ')) {
+      // No open PR for the issue, so the reviewer gate (#57) has nothing to check.
+      return ok('[]')
+    }
     if (line.startsWith('pr view ')) {
       return pull === 'missing'
         ? failed('GraphQL: Could not resolve to a PullRequest with the number of 12.')

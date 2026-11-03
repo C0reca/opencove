@@ -6,6 +6,7 @@ import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
 import { createWakeService } from './lib/wake.mjs'
 import { createReviewService } from './lib/review.mjs'
+import { createReviewerService } from './lib/reviewer.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { permissionModeFor } from './lib/permissions.mjs'
@@ -17,12 +18,25 @@ export async function activate(context) {
   const host = context.host
   const service = createIssueService({ host })
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
-  const closing = createClosingService({ host, repoOf: service.repoForProject })
+  // Every open PR needs the reviewer's verdict before issue.request-review (#57). The gate is
+  // late-bound because the reviewer itself requests review through closing.
+  const closing = createClosingService({
+    host,
+    repoOf: service.repoForProject,
+    reviewGate: input => reviewer.requireReviewed(input),
+  })
   const review = createReviewService({
     host,
     issues: service,
     closing,
     repoOf: service.repoForProject,
+  })
+  // Reviewer agent before the human queue (#57).
+  const reviewer = createReviewerService({
+    host,
+    repoOf: service.repoForProject,
+    closing,
+    returnToEngineer: review.returnToEngineer,
   })
   // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
   const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
@@ -103,6 +117,10 @@ export async function activate(context) {
             pr: params.pr,
             evidence: params.evidence,
           })
+        case 'reviewer.launch':
+          return reviewer.launch(params)
+        case 'reviewer.submit':
+          return reviewer.submit(params)
         case 'issue.request-review':
           return closing.requestReview({
             projectId,

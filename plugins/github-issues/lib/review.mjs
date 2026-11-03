@@ -291,7 +291,7 @@ export function createReviewService({
     })
   }
 
-  return { list, merge, requestChanges, closeWithoutMerge }
+  return { list, merge, requestChanges, closeWithoutMerge, returnToEngineer }
 }
 
 function messageOf(caught) {

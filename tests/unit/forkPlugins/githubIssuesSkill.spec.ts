@@ -95,6 +95,11 @@ describe('github-issues issue-coordinator skill', () => {
     expect(skill).toMatch(/-q|--jq/)
   })
 
+  it('sends an open PR to the reviewer agent and never submits a verdict itself (#57)', () => {
+    expect(skill).toContain('reviewer.launch')
+    expect(skill).toContain('You never run `reviewer.submit`')
+  })
+
   it('requests review when a PR is ready and tells the human', () => {
     expect(skill).toContain('issue.request-review')
     expect(skill).toMatch(/tell the human/i)
