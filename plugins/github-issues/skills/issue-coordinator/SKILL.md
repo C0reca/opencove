@@ -24,9 +24,11 @@ Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `i
 
 ## 2. Limits
 
-- At most **3 issue agents** run at the same time. Count the rows of `agents.status` whose
-  `agentState` is `working` or `waiting`, or whose `runtimeStatus` is still running. Do not assign
-  more while the count is 3 or more. If the human asks for a different number, use theirs.
+- The number of issue agents per repository is limited by the `max-agents` preference (default 2).
+  An agent counts while its `agentState` is `working` or `waiting`, or, with no `agentState`, while
+  its `runtimeStatus` is running. `issue.assign` applies the limit itself: when it fails with
+  `limit-reached`, assign nothing more this loop and wait for an agent to finish. Do not retry it
+  and do not work around it. Only the human changes the limit, in the preference.
 - Stop and ask the human on any `untrusted-author`, `human-only`, `task-not-in-worktree`, or
   unexpected error.
 
@@ -43,7 +45,7 @@ Use exactly these command ids: `issues.list`, `agents.status`, `agents.read`, `i
    any issue labelled `no-agent` (a human keeps it for themselves). Take the rest in that order,
    and only while under the limit in section 2.
 4. Assign each pick, one call per issue. Immediately before each call, read `agents.status` again
-   (step 3.1) and check the count is still under the limit. Then run exactly one command with the
+   (step 3.1) and skip the call when the count has reached the limit. Then run exactly one command with the
    issue number written literally:
    `opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":<N>}'`
    Never put several issues in one call, never loop over issue numbers, and never use a variable

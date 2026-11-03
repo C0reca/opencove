@@ -287,6 +287,16 @@ export function createFakeHost({
           }
           task.data = { ...task.data, status: 'doing', linkedAgentNodeId: agentId }
         }
+        // Like the real host, the launched agent exists as a running node in the target Space.
+        const target = input.target as { spaceId?: string }
+        nodes.set(agentId, {
+          id: agentId,
+          kind: 'agent',
+          title: String(input.title ?? ''),
+          spaceId: target?.spaceId ?? null,
+          status: 'running',
+          data: { kind: 'agent', prompt: String(input.prompt ?? '') },
+        })
         return { node: { id: agentId } }
       },
       write: async ({ nodeId, data }: { nodeId: string; data: string }) => {

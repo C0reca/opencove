@@ -118,6 +118,13 @@
         "default": ""
       },
       {
+        "id": "max-agents",
+        "title": "Issue agents per project",
+        "description": "Most issue agents (working or waiting) that issue.assign starts per repository. One line per repository: owner/repo: N, and *: N for every other repository. The exact line wins. Default 2. A malformed line is ignored. Sidebar assigns by a person are not limited.",
+        "type": "string",
+        "default": ""
+      },
+      {
         "id": "coordinator-wake",
         "title": "Wake the coordinator",
         "description": "When an issue agent starts waiting or finishes, sends the running issue coordinator a short [github-issues] message so it runs its next loop without a manual nudge. Coalesced, and only while the coordinator is idle.",
