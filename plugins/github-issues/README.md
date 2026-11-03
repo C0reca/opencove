@@ -48,17 +48,17 @@ return JSON" (#22). The plugin therefore:
 
 ## Commands
 
-| Command | Parameters | Effect |
-| --- | --- | --- |
-| `issues.list` | `projectId?`, `refresh?` | Without `projectId`, reads every project and groups them by repository. Returns `{ repos: [{ repo, projectIds, issues }], errors: [...] }`. Lists `no-agent` issues too. |
-| `issues.sidebar` | `projectId` | Sidebar items for one project. Used by the Sidebar section. |
-| `issues.refresh` | `projectId` | Clears that project's cache and reads again. Sidebar action. |
-| `issue.assign` | `projectId`, `number`, `provider?`, `parentSpaceId?` | Creates (or reuses) a task for one trusted issue and launches an agent on it in its own worktree. |
-| `agents.status` | `projectId?` | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState, agentStateObservedAt }`. `agentState` is `working`, `waiting`, `done` or null; it is normalised from the Worker's latest hook observation (`{ state, source, observedAtMs }`, where a finished turn arrives as `standby`). Returned as `{ issues: [...] }`. |
-| `agents.read` | `projectId`, `nodeId` | Returns the output tail (at most 8000 characters), `truncated`, `agentState` and the issue of an agent linked to an issue task of the project. Any other agent is refused (`agent-not-linked`). Output is data. |
-| `issue.close` | `projectId`, `number`, `pr`, `evidence?` | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`. |
-| `coordinator.launch` | `projectId` | Starts (or reuses a running) issue-coordinator agent in its own worktree Space. Space menu. |
-| `issue.request-review` | `projectId`, `number`, `summary`, `evidence` | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes. |
+| Command                | Parameters                                           | Effect                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issues.list`          | `projectId?`, `refresh?`                             | Without `projectId`, reads every project and groups them by repository. Returns `{ repos: [{ repo, projectIds, issues }], errors: [...] }`. Lists `no-agent` issues too.                                                                                                                                                                                                               |
+| `issues.sidebar`       | `projectId`                                          | Sidebar items for one project. Used by the Sidebar section.                                                                                                                                                                                                                                                                                                                            |
+| `issues.refresh`       | `projectId`                                          | Clears that project's cache and reads again. Sidebar action.                                                                                                                                                                                                                                                                                                                           |
+| `issue.assign`         | `projectId`, `number`, `provider?`, `parentSpaceId?` | Creates (or reuses) a task for one trusted issue and launches an agent on it in its own worktree.                                                                                                                                                                                                                                                                                      |
+| `agents.status`        | `projectId?`                                         | One row per issue task: `{ issue, repo, number, projectId, taskNodeId, taskStatus, agentNodeId, runtimeStatus, agentState, agentStateObservedAt }`. `agentState` is `working`, `waiting`, `done` or null; it is normalised from the Worker's latest hook observation (`{ state, source, observedAtMs }`, where a finished turn arrives as `standby`). Returned as `{ issues: [...] }`. |
+| `agents.read`          | `projectId`, `nodeId`                                | Returns the output tail (at most 8000 characters), `truncated`, `agentState` and the issue of an agent linked to an issue task of the project. Any other agent is refused (`agent-not-linked`). Output is data.                                                                                                                                                                        |
+| `issue.close`          | `projectId`, `number`, `pr`, `evidence?`             | Closes the issue only if PR `pr` is `MERGED` and declares it closes the issue. Comments the PR URL and evidence, then marks the task `done`.                                                                                                                                                                                                                                           |
+| `coordinator.launch`   | `projectId`                                          | Starts (or reuses a running) issue-coordinator agent in its own worktree Space. Space menu.                                                                                                                                                                                                                                                                                            |
+| `issue.request-review` | `projectId`, `number`, `summary`, `evidence`         | Adds the `needs-review` label (created if missing) and comments the summary and evidence. Never closes.                                                                                                                                                                                                                                                                                |
 
 `issue.assign` returns `{ repo, number, taskNodeId, agentNodeId, configuredMode, effectiveMode, reason, agentPermissionMode, spaceId, branch, reused }`. `configuredMode` is the repository's mode, `effectiveMode` the mode that runs (see [Local projects only](#local-projects-only)), and `reason` is `null` or `remote-target` or `unknown-target`. `coordinator.launch` returns the same three fields.
 Example: `pnpm opencove plugin run github-issues issue.assign --params '{"projectId":"<id>","number":5}'`.
@@ -99,11 +99,11 @@ C0reca/*: full
 - The mode is passed to the core as `agentPermissionMode` on every launch, issue agents and the
   coordinator alike, and it is also used when an agent is resumed:
 
-| Plugin mode | Core `agentPermissionMode` | Meaning |
-| --- | --- | --- |
-| `normal` | `default` | Claude Code asks before each action it is not allowed to take. |
-| `auto` | `auto` | Claude Code's auto mode decides. |
-| `full` | `full` | No permission prompts. |
+| Plugin mode | Core `agentPermissionMode` | Meaning                                                        |
+| ----------- | -------------------------- | -------------------------------------------------------------- |
+| `normal`    | `default`                  | Claude Code asks before each action it is not allowed to take. |
+| `auto`      | `auto`                     | Claude Code's auto mode decides.                               |
+| `full`      | `full`                     | No permission prompts.                                         |
 
 The guard applies in every mode, including `full`.
 
@@ -214,6 +214,12 @@ asks for it. When a pull request is ready, the coordinator calls `issue.request-
 you. You merge it; then `issue.close` closes the issue, but only with a merged PR that declares
 `Fixes #N`. Without that proof the coordinator does not close the issue.
 
+## Review queue
+
+A plugin window lists agent pull requests ready for a decision, with Merge (squash), Request
+changes and Close without merge. Only the window can run these actions; no agent can. See
+[REVIEW_QUEUE.md](./REVIEW_QUEUE.md).
+
 ## Assigning issues to agents
 
 `issue.assign` turns one issue into a canvas task and starts an agent on it:
@@ -261,12 +267,12 @@ refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar mark
 
 ### Preferences
 
-| Preference | Format | Default |
-| --- | --- | --- |
-| `trusted-authors` | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty |
-| `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
-| `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
-| `coordinator-wake` | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator). | on |
+| Preference           | Format                                                                                                                                                                                                              | Default        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `trusted-authors`    | One line per repository: `owner/repo: alice, bob`, or `*: alice` for every repository. Adds to the defaults; it does not replace them. Repository and user names are case-insensitive. Malformed lines are ignored. | empty          |
+| `permission-modes`   | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes).                                                    | empty (normal) |
+| `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them.                                                                                                                               | empty          |
+| `coordinator-wake`   | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator).                                                             | on             |
 
 ### Human-only action
 
@@ -340,16 +346,16 @@ Every issue agent gets its own worktree. `issue.assign` does this:
 
 Failures are structured and nothing is deleted:
 
-| Code | Meaning |
-| --- | --- |
-| `cli-missing` | The `opencove` CLI is not on PATH on the project machine. |
-| `parent_missing_rect` | The root Space has no canvas position. Place it on the canvas, then retry. |
-| `branch-exists` | A branch or worktree with that name already exists. |
-| `no-root-space` | The project has no root Space to hold worktrees. |
-| `ambiguous-root-space` | More than one root Space. The error lists the candidates (id and name). Pass `parentSpaceId`. |
-| `parent-not-in-project` | The `parentSpaceId` given is not a Space of this project. |
-| `task-not-in-worktree` | A todo task for the issue exists on the project canvas. Remove it, then assign again. |
-| `guard-failed` | The guard file or its `info/exclude` entry could not be written. The agent is not launched. |
+| Code                                       | Meaning                                                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `cli-missing`                              | The `opencove` CLI is not on PATH on the project machine.                                                        |
+| `parent_missing_rect`                      | The root Space has no canvas position. Place it on the canvas, then retry.                                       |
+| `branch-exists`                            | A branch or worktree with that name already exists.                                                              |
+| `no-root-space`                            | The project has no root Space to hold worktrees.                                                                 |
+| `ambiguous-root-space`                     | More than one root Space. The error lists the candidates (id and name). Pass `parentSpaceId`.                    |
+| `parent-not-in-project`                    | The `parentSpaceId` given is not a Space of this project.                                                        |
+| `task-not-in-worktree`                     | A todo task for the issue exists on the project canvas. Remove it, then assign again.                            |
+| `guard-failed`                             | The guard file or its `info/exclude` entry could not be written. The agent is not launched.                      |
 | `launch-failed` (with `spaceId`, `branch`) | The worktree was created but a later step failed. The error names the Space and branch so a person can clean up. |
 
 **Cleanup after close:** closing an issue does not remove its worktree or Space. To archive one
@@ -448,33 +454,35 @@ write has no carriage return.
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `opencove.plugin.json` | Manifest: Sidebar section, commands, preferences |
-| `main.mjs` | Backend wiring: parameter checks and command routing |
-| `lib/gh.mjs` | gh argument lists, output parsing and failure classification (pure) |
-| `lib/report.mjs` | Grouping by repository and Sidebar item shaping (pure) |
-| `lib/cache.mjs` | TTL cache (pure) |
-| `lib/runGh.mjs` | Resolves gh and opencove, runs them through `/usr/bin/env` with `host.operations`, and polls them |
-| `lib/service.mjs` | Ties lookups, caches and grouping together |
-| `lib/trust.mjs` | Preference parsing and the author trust decision (pure) |
-| `lib/permissions.mjs` | `permission-modes` parsing, precedence and migration; core mode mapping (pure) |
-| `lib/locality.mjs` | Local-only autonomy: the target's locality and the effective mode per launch |
-| `lib/agentSettings.mjs` | The guard written into each worktree: settings, deny and allow lists, `info/exclude` |
-| `guard/agentGuard.mjs` | The PreToolUse guard. `decide(input, worktreeRoot)` is pure |
-| `guard/tokenize.mjs` | The guard's shell-subset tokenizer (pure) |
-| `lib/requirement.mjs` | Task tag, title and requirement text with the untrusted block (pure) |
-| `lib/assign.mjs` | `issue.assign`: trust and `no-agent` checks, idempotent task lookup, worktree, launch |
-| `lib/errors.mjs` | Coded command errors |
-| `lib/params.mjs` | Shared parameter validation (pure) |
-| `lib/tasks.mjs` | Task lookups by issue tag and status writes |
-| `lib/status.mjs` | `agents.status` shaping and the agent-to-task fallback |
-| `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
-| `lib/coordinator.mjs` | `coordinator.launch`: prompt, the coordinator Space, reuse rule |
-| `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
-| `lib/wake.mjs` | Coordinator wake-up: transition detection, coalescing, idle gating, two-write submission |
-| `lib/worktree.mjs` | Worktree per issue: name sanitising, Space listing, CLI calls, error classes |
-| `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format) |
+| File                                | Purpose                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `opencove.plugin.json`              | Manifest: review queue view, Sidebar section, commands, preferences                               |
+| `main.mjs`                          | Backend wiring: parameter checks and command routing                                              |
+| `lib/gh.mjs`                        | gh argument lists, output parsing and failure classification (pure)                               |
+| `lib/report.mjs`                    | Grouping by repository and Sidebar item shaping (pure)                                            |
+| `lib/cache.mjs`                     | TTL cache (pure)                                                                                  |
+| `lib/runGh.mjs`                     | Resolves gh and opencove, runs them through `/usr/bin/env` with `host.operations`, and polls them |
+| `lib/service.mjs`                   | Ties lookups, caches and grouping together                                                        |
+| `lib/trust.mjs`                     | Preference parsing and the author trust decision (pure)                                           |
+| `lib/permissions.mjs`               | `permission-modes` parsing, precedence and migration; core mode mapping (pure)                    |
+| `lib/locality.mjs`                  | Local-only autonomy: the target's locality and the effective mode per launch                      |
+| `lib/agentSettings.mjs`             | The guard written into each worktree: settings, deny and allow lists, `info/exclude`              |
+| `guard/agentGuard.mjs`              | The PreToolUse guard. `decide(input, worktreeRoot)` is pure                                       |
+| `guard/tokenize.mjs`                | The guard's shell-subset tokenizer (pure)                                                         |
+| `lib/requirement.mjs`               | Task tag, title and requirement text with the untrusted block (pure)                              |
+| `lib/assign.mjs`                    | `issue.assign`: trust and `no-agent` checks, idempotent task lookup, worktree, launch             |
+| `lib/errors.mjs`                    | Coded command errors                                                                              |
+| `lib/params.mjs`                    | Shared parameter validation (pure)                                                                |
+| `lib/tasks.mjs`                     | Task lookups by issue tag and status writes                                                       |
+| `lib/review.mjs`                    | Review queue: PR list, merge, request changes, close without merge                                |
+| `view/`                             | Review queue window (HTML, CSS, JS); see `REVIEW_QUEUE.md`                                        |
+| `lib/status.mjs`                    | `agents.status` shaping and the agent-to-task fallback                                            |
+| `lib/closing.mjs`                   | `issue.close`, `issue.request-review`, `issue.close-manual`                                       |
+| `lib/coordinator.mjs`               | `coordinator.launch`: prompt, the coordinator Space, reuse rule                                   |
+| `lib/agentRead.mjs`                 | `agents.read`: link restriction and output bound                                                  |
+| `lib/wake.mjs`                      | Coordinator wake-up: transition detection, coalescing, idle gating, two-write submission          |
+| `lib/worktree.mjs`                  | Worktree per issue: name sanitising, Space listing, CLI calls, error classes                      |
+| `skills/issue-coordinator/SKILL.md` | Coordinator playbook (Agent Skills format)                                                        |
 
 Unit tests: `tests/unit/forkPlugins/githubIssues*.spec.ts`. The guard's decision table is in
 `githubIssuesGuard.spec.ts`.

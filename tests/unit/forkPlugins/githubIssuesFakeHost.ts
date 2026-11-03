@@ -137,6 +137,7 @@ export function createFakeHost({
   const launches: Array<Record<string, unknown>> = []
   const created: FakeNode[] = []
   const updates: Array<{ nodeId: string; data: Record<string, unknown> }> = []
+  const closed: string[] = []
   // Files the plugin wrote through host.filesystem, keyed by `${spaceId ?? 'project'}:${path}`.
   const files = new Map<string, string>()
   const dirs: string[] = []
@@ -256,6 +257,11 @@ export function createFakeHost({
         created.push(node)
         return { node }
       },
+      close: async ({ nodeId }: { nodeId: string }) => {
+        closed.push(nodeId)
+        nodes.delete(nodeId)
+        return { nodeId }
+      },
       update: async ({ nodeId, data }: { nodeId: string; data: Record<string, unknown> }) => {
         const node = nodes.get(nodeId)
         if (!node) {
@@ -328,6 +334,7 @@ export function createFakeHost({
     processCalls,
     launches,
     created,
+    closed,
     updates,
     nodes,
     reads,

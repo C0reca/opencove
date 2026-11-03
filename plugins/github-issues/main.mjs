@@ -5,6 +5,7 @@ import { commandError } from './lib/errors.mjs'
 import { readLinkedAgent } from './lib/agentRead.mjs'
 import { collectAgentStatus } from './lib/status.mjs'
 import { createWakeService } from './lib/wake.mjs'
+import { createReviewService } from './lib/review.mjs'
 import { sidebarItemsForProject } from './lib/report.mjs'
 import { createIssueService } from './lib/service.mjs'
 import { permissionModeFor } from './lib/permissions.mjs'
@@ -17,11 +18,40 @@ export async function activate(context) {
   const service = createIssueService({ host })
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
   const closing = createClosingService({ host, repoOf: service.repoForProject })
+  const review = createReviewService({
+    host,
+    issues: service,
+    closing,
+    repoOf: service.repoForProject,
+  })
   // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
   const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
   wake.start()
 
   return {
+    // The review queue view (#56). Merge and PR close exist only here: `plugin run` reaches
+    // runCommand, never invoke, so no agent can call them.
+    async invoke(method, rawParams, viewContext) {
+      const params = rawParams ?? {}
+      if (viewContext?.preview) {
+        if (method === 'review.list') {
+          return { items: [], errors: [], preview: true }
+        }
+        throw commandError('preview', 'The preview does not change GitHub.')
+      }
+      switch (method) {
+        case 'review.list':
+          return review.list({ refresh: params.refresh === true })
+        case 'review.merge':
+          return review.merge(params)
+        case 'review.request-changes':
+          return review.requestChanges(params)
+        case 'review.close':
+          return review.closeWithoutMerge(params)
+        default:
+          throw new Error(`Unknown method: ${method}`)
+      }
+    },
     async runCommand(commandId, rawParams, commandContext) {
       const params = rawParams ?? {}
       const projectId = resolveProjectId(params, commandContext)

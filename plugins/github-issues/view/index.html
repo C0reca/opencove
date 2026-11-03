@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Review queue</title>
+    <link rel="stylesheet" href="view.css" />
+    <script type="module" src="view.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>Review queue</h1>
+      <button id="refresh" type="button" disabled>Refresh</button>
+    </header>
+    <p id="status" role="status">Connecting to OpenCove…</p>
+    <ul id="queue"></ul>
+    <template id="item">
+      <li>
+        <p class="origin">
+          <span class="repo"></span> <a class="issue" target="_blank" rel="noreferrer"></a>
+        </p>
+        <h2><a class="pr" target="_blank" rel="noreferrer"></a></h2>
+        <p class="meta">
+          <span class="ci"></span> <span class="age"></span>
+          <a class="diff" target="_blank" rel="noreferrer">Diff</a>
+        </p>
+        <p class="summary"></p>
+        <p class="evidence"></p>
+        <details class="files">
+          <summary></summary>
+          <ul></ul>
+        </details>
+        <label
+          >Comment (required to request changes or close)<textarea
+            maxlength="4000"
+            rows="3"
+          ></textarea>
+        </label>
+        <div class="actions">
+          <button class="merge" type="button">Merge (squash)</button>
+          <button class="changes" type="button">Request changes</button>
+          <button class="close" type="button">Close without merge</button>
+        </div>
+        <p class="error" role="alert"></p>
+      </li>
+    </template>
+  </body>
+</html>
