@@ -1,4 +1,5 @@
 import { createAssignService } from './lib/assign.mjs'
+import { createCleanupService } from './lib/cleanup.mjs'
 import { createClosingService } from './lib/closing.mjs'
 import { launchCoordinator } from './lib/coordinator.mjs'
 import { commandError } from './lib/errors.mjs'
@@ -20,6 +21,14 @@ export async function activate(context) {
   // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
   const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
   wake.start()
+  // Cleans an issue's worktree, branches and Space once its PR is merged. Stopped in dispose().
+  const cleanup = createCleanupService({
+    host,
+    projectIds: () => allProjectIds(),
+    repoOf: service.repoForProject,
+    log: context.log,
+  })
+  cleanup.start()
 
   return {
     async runCommand(commandId, rawParams, commandContext) {
@@ -99,6 +108,7 @@ export async function activate(context) {
     },
     async dispose() {
       await wake.dispose()
+      await cleanup.dispose()
       context.log('GitHub Issues stopped')
     },
   }

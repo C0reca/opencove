@@ -28,7 +28,12 @@ export async function listTaskNodes(host, projectId) {
   }
   return mapSeries(listed.nodes ?? [], async node => {
     const detail = await host.nodes.get({ nodeId: node.id })
-    return { id: node.id, title: node.title, data: detail?.node?.data ?? {} }
+    return {
+      id: node.id,
+      title: node.title,
+      spaceId: node.spaceId ?? null,
+      data: detail?.node?.data ?? {},
+    }
   })
 }
 
