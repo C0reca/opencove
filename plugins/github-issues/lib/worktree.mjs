@@ -192,7 +192,7 @@ export async function targetWorkingDirectory(host, target) {
   return resolved.workingDirectory
 }
 
-async function runOpencove(host, projectId, args) {
+export async function runOpencove(host, projectId, args) {
   const result = await runTool(host, { projectId }, 'opencove', args, {
     timeoutMs: CLI_TIMEOUT_MS,
     classify: classifyOpencoveFailure,

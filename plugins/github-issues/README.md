@@ -267,6 +267,7 @@ refuses it with `no-agent`. `issues.list` still returns it, and the Sidebar mark
 | `permission-modes` | One line per repository: `owner/repo: normal \| auto \| full`, or `owner/*: mode`. Exact line wins over the wildcard. See [Permission modes](#permission-modes). | empty (normal) |
 | `auto-approve-repos` | Legacy. Repositories listed here count as `full` unless `permission-modes` sets them. | empty |
 | `coordinator-wake` | On or off. When on, the plugin wakes a running coordinator when its issue agents wait or finish. See [Waking the coordinator](#waking-the-coordinator). | on |
+| `auto-cleanup` | On or off. When on, the plugin cleans an issue's worktree, branches and Space after its pull request is merged. See [CLEANUP.md](CLEANUP.md). | on |
 
 ### Human-only action
 

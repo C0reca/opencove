@@ -123,6 +123,13 @@
         "description": "When an issue agent starts waiting or finishes, sends the running issue coordinator a short [github-issues] message so it runs its next loop without a manual nudge. Coalesced, and only while the coordinator is idle.",
         "type": "boolean",
         "default": true
+      },
+      {
+        "id": "auto-cleanup",
+        "title": "Clean up after merge",
+        "description": "Every 2 minutes, for issue tasks whose pull request is MERGED and declares it closes the issue: closes the issue if still open, marks the task done, archives the worktree and local branch, deletes the remote branch and archives the issue Space. A worktree with uncommitted changes is kept.",
+        "type": "boolean",
+        "default": true
       }
     ]
   }
