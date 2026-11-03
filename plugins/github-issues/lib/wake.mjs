@@ -19,6 +19,9 @@ export const SETTLE_MS = 5_000
 export const SUBMIT_DELAY_MS = 1_500
 // After a wake, wait this long for the coordinator to react before sending the next one.
 export const HOLD_MS = 120_000
+// A coordinator seen as 'working' with no new observation for this long is treated as stalled: its
+// Stop hook was probably lost (#64). Claude Code queues text typed during a turn, so writing is safe.
+export const STALL_MS = 180_000
 
 const WAKE_STATES = new Set(['waiting', 'done'])
 
@@ -68,6 +71,7 @@ export function createWakeService({
   settleMs = SETTLE_MS,
   submitDelayMs = SUBMIT_DELAY_MS,
   holdMs = HOLD_MS,
+  stallMs = STALL_MS,
 }) {
   const projects = new Map()
   let timer = null
@@ -188,7 +192,7 @@ export function createWakeService({
       }
       entry.awaitingReaction = false
     }
-    if (!WAKE_STATES.has(coordinator.state)) {
+    if (!WAKE_STATES.has(coordinator.state) && !isStalled(coordinator)) {
       return
     }
     if (now() - entry.lastChangeAt < settleMs) {
@@ -229,6 +233,11 @@ export function createWakeService({
     entry.awaitingReaction = true
     entry.reactionBaseline = baseline
     entry.holdUntil = now() + holdMs
+  }
+
+  function isStalled(coordinator) {
+    const at = Date.parse(coordinator.observedAt ?? '')
+    return coordinator.state === 'working' && Number.isFinite(at) && now() - at > stallMs
   }
 
   return { start, tick, dispose }

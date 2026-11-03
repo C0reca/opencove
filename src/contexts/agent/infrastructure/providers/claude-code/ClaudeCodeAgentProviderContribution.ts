@@ -106,8 +106,15 @@ export class ClaudeCodeAgentProviderContribution implements AgentProviderContrib
   }
 }
 
+// Each hook event starts the relay runtime from scratch. Under load that start-up alone can pass 3 s,
+// and Claude Code then discards the event (a lost Stop or PreToolUse leaves the agent state stale).
+// The relay keeps its own 2 s deadline once running, so only a slow start-up gains the extra time.
+const CLAUDE_HOOK_TIMEOUT_SECONDS = 10
+
 function createClaudeHooks(command: string, args: readonly string[]) {
-  const handler = { hooks: [{ args, command, type: 'command', timeout: 3 }] }
+  const handler = {
+    hooks: [{ args, command, type: 'command', timeout: CLAUDE_HOOK_TIMEOUT_SECONDS }],
+  }
   return {
     SessionStart: [handler],
     Notification: [handler],

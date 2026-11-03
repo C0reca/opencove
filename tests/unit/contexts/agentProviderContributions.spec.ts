@@ -115,6 +115,13 @@ describe('ClaudeCodeAgentProviderContribution', () => {
       type: 'command',
       command: '/usr/bin/env',
     })
+    // #64: a slow relay start-up under load must not make Claude Code discard Stop/PreToolUse.
+    for (const [event, handlers] of Object.entries(settings.hooks)) {
+      expect({
+        event,
+        timeout: (handlers as Array<{ hooks: Array<{ timeout: number }> }>)[0].hooks[0].timeout,
+      }).toEqual({ event, timeout: 10 })
+    }
     expect(plan.args.at(-1)).toBe('Explain the change')
     expect(plan.env).toMatchObject({
       OPENCOVE_CLAUDE_HOOK_TOKEN: 'claude-token',
