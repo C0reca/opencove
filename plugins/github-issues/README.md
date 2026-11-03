@@ -320,6 +320,13 @@ invokes it yet. Use it only from a menu, after reading the issue yourself. It re
 
 Like `issue.assign-untrusted`, it is not in the CLI usage text.
 
+`issue.create-from-node` (node menu, **Create GitHub issue**) creates an issue from one note or
+task with your `gh` account: first line = title, the rest = body (task: its requirement). The node
+then holds the link: a note gets an `Issue: <url>` line, a task the tag
+`created-issue:owner/repo#N` (not `issue:`, so `issue.assign` ignores it). That link makes it
+idempotent: running it again returns `{ created: false }` without a second issue. The CLI is refused
+(`human-only`); other errors are `invalid-node`, `empty-text` and `in-progress` (double click).
+
 ## Worktree per issue
 
 Every issue agent gets its own worktree. `issue.assign` does this:
@@ -470,6 +477,7 @@ write has no carriage return.
 | `lib/tasks.mjs` | Task lookups by issue tag and status writes |
 | `lib/status.mjs` | `agents.status` shaping and the agent-to-task fallback |
 | `lib/closing.mjs` | `issue.close`, `issue.request-review`, `issue.close-manual` |
+| `lib/fromNode.mjs` | `issue.create-from-node`: node text to issue, link and idempotency |
 | `lib/coordinator.mjs` | `coordinator.launch`: prompt, the coordinator Space, reuse rule |
 | `lib/agentRead.mjs` | `agents.read`: link restriction and output bound |
 | `lib/wake.mjs` | Coordinator wake-up: transition detection, coalescing, idle gating, two-write submission |

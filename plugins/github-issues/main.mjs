@@ -1,5 +1,6 @@
 import { createAssignService } from './lib/assign.mjs'
 import { createClosingService } from './lib/closing.mjs'
+import { createFromNodeService } from './lib/fromNode.mjs'
 import { launchCoordinator } from './lib/coordinator.mjs'
 import { commandError } from './lib/errors.mjs'
 import { readLinkedAgent } from './lib/agentRead.mjs'
@@ -17,6 +18,7 @@ export async function activate(context) {
   const service = createIssueService({ host })
   const assigner = createAssignService({ host, repoOf: service.repoForProject })
   const closing = createClosingService({ host, repoOf: service.repoForProject })
+  const fromNode = createFromNodeService({ host, repoOf: service.repoForProject })
   // Wakes a running coordinator when its issue agents wait or finish. Stopped in dispose().
   const wake = createWakeService({ host, projectIds: () => allProjectIds(), log: context.log })
   wake.start()
@@ -92,6 +94,18 @@ export async function activate(context) {
             projectId,
             number: params.number,
             reason: params.reason,
+          })
+        case 'issue.create-from-node':
+          // Human-only: the node menu carries host context with the clicked node; the CLI never does.
+          if (!commandContext?.host) {
+            throw commandError(
+              'human-only',
+              'issue.create-from-node is a node menu action; it cannot run from the CLI.',
+            )
+          }
+          return fromNode.createFromNode({
+            projectId: requireProject(projectId)[0],
+            nodeIds: commandContext.host.nodeIds,
           })
         default:
           throw new Error(`Unknown command: ${commandId}`)
