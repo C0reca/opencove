@@ -3,10 +3,18 @@
   "id": "github-issues",
   "version": "0.1.0",
   "displayName": "GitHub Issues",
-  "description": "Shows open GitHub issues of each project's repository in the Sidebar, using the local gh CLI.",
+  "description": "Shows open GitHub issues of each project's repository in the Sidebar, and a review queue of agent pull requests, using the local gh CLI.",
   "author": "C0reca",
   "main": "main.mjs",
   "readme": "README.md",
+  "view": {
+    "entry": "view/index.html",
+    "instances": "single",
+    "width": 720,
+    "height": 560,
+    "minWidth": 420,
+    "minHeight": 320
+  },
   "contributes": {
     "sidebar": [{ "id": "issues", "title": "Issues", "itemsCommand": "issues.sidebar" }],
     "commands": [
