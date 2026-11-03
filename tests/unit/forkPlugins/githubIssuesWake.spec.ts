@@ -49,6 +49,7 @@ function harness(
     settleMs?: number
     submitDelayMs?: number
     holdMs?: number
+    stallMs?: number
     failTextWrites?: number
     sleep?: (ms: number) => Promise<void>
   } = {},
@@ -104,6 +105,7 @@ function harness(
     settleMs: options.settleMs ?? 0,
     submitDelayMs: options.submitDelayMs ?? 1500,
     holdMs: options.holdMs ?? 120_000,
+    stallMs: options.stallMs ?? 180_000,
   })
 
   return {
@@ -229,6 +231,37 @@ describe('github-issues wake coordinator state', () => {
       { nodeId: COORD, data: WAITING_43 },
       { nodeId: COORD, data: '\r' },
     ])
+  })
+
+  it('treats a coordinator stuck in working with no new observation as stalled (#64)', async () => {
+    const h = harness({
+      coordState: { state: 'working', at: 1_000 },
+      agents: { 'agent-43': { state: 'working', at: 1 } },
+    })
+    await h.wake.tick()
+    h.agentStates['agent-43'] = { state: 'done', at: 2 }
+    h.at(1_000 + 180_000)
+    await h.wake.tick()
+    expect(h.writes).toEqual([])
+
+    h.at(1_000 + 180_001)
+    await h.wake.tick()
+    expect(h.writes).toEqual([
+      { nodeId: COORD, data: DONE_43 },
+      { nodeId: COORD, data: '\r' },
+    ])
+  })
+
+  it('does not treat a working coordinator without an observation time as stalled', async () => {
+    const h = harness({
+      coordState: 'working',
+      agents: { 'agent-43': { state: 'working', at: 1 } },
+    })
+    await h.wake.tick()
+    h.agentStates['agent-43'] = { state: 'done', at: 2 }
+    h.at(10_000_000)
+    await h.wake.tick()
+    expect(h.writes).toEqual([])
   })
 
   it('queues the message while the coordinator has no observed state', async () => {

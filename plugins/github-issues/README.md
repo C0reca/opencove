@@ -415,7 +415,10 @@ state, and only a readable "no running coordinator" resets it.
   replayed.
 - **Coalescing:** transitions are queued and sent once, after 5 s with no new transition.
 - **Idle only:** the message is written only while the coordinator's observed state is `done` or
-  `waiting`. A `working` or unknown coordinator keeps the message queued.
+  `waiting`. A `working` or unknown coordinator keeps the message queued. One exception: a
+  coordinator that has shown `working` with no new observation for more than 3 minutes counts as
+  stalled, because its `Stop` hook was probably lost (#64). Claude Code queues text typed during a
+  turn, so writing to it then is harmless.
 - **No repeats:** each transition is keyed by issue, state and `observedAt`, and is sent once. After a
   wake, the next one waits until the coordinator has a new observation (or 2 minutes pass).
 - **No coordinator, no write:** a project without a running coordinator is skipped.
