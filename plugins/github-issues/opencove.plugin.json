@@ -93,6 +93,13 @@
         "usage": "--params '{\"projectId\":\"<id>\"}'",
         "target": "plugin",
         "menus": ["space"]
+      },
+      {
+        "id": "issue.create-from-node",
+        "title": "Create GitHub issue",
+        "description": "Human-only node menu action: creates an issue in the project's repository from a note or task (first line = title, the rest = body) with your gh account, and links the node (note: appends the link; task: tag created-issue:owner/repo#N). One issue per node. Needs host context, so it cannot run from the CLI.",
+        "target": "plugin",
+        "menus": ["node"]
       }
     ],
     "skills": [
