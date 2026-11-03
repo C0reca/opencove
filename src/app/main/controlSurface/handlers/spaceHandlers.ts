@@ -14,6 +14,8 @@ import type {
 import type { PersistenceStore } from '../../../../platform/persistence/sqlite/PersistenceStore'
 import { normalizePersistedAppState } from '../../../../platform/persistence/sqlite/normalize'
 import { createChildSpace } from '../../../../contexts/space/application/createChildSpace'
+import type { GitWorktreeInfo } from '../../../../shared/contracts/dto'
+import { registerSpaceArchiveHandler } from './spaceArchiveHandler'
 import type {
   NormalizedPersistedNode,
   NormalizedPersistedSpace,
@@ -303,6 +305,9 @@ function applyChildDirectoryExpectationToMovedNodes({
 export function registerSpaceHandlers(
   controlSurface: ControlSurface,
   getPersistenceStore: () => Promise<PersistenceStore>,
+  deps: {
+    listWorktrees?: (input: { repoPath: string }) => Promise<{ worktrees: GitWorktreeInfo[] }>
+  } = {},
 ): void {
   controlSurface.register('space.list', {
     kind: 'query',
@@ -448,4 +453,6 @@ export function registerSpaceHandlers(
     },
     defaultErrorCode: 'common.unexpected',
   })
+
+  registerSpaceArchiveHandler(controlSurface, getPersistenceStore, deps)
 }
